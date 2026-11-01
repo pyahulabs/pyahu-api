@@ -27,7 +27,50 @@
   --sombra:0 30px 60px -24px rgba(22,26,18,.35),0 8px 18px -10px rgba(22,26,18,.22);
   --sombra-chica:0 1px 0 rgba(255,255,255,.6) inset,0 10px 24px -16px rgba(22,26,18,.4);
   --radio:20px;
+  /* Tokens que cambian con el tema */
+  --alerta:#A3401F;
+  --acento:var(--terracota);
+  --aviso-fondo:var(--noche); --aviso-texto:var(--papel);
+  --flecha:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%2323281C' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  color-scheme:light;
 }
+
+/* ============ Modo oscuro ============
+   Los mismos tokens con valores de noche. Se aplica si el sistema está en
+   oscuro (y no elegiste claro a mano) o si elegiste oscuro con el botón.
+   El bloque está repetido porque CSS no deja compartirlo entre los dos casos. */
+@media (prefers-color-scheme:dark){
+  :root:not([data-tema="claro"]){
+    --papel:#1C2017; --papel-2:#272C20; --papel-3:#363C2D;
+    --tinta:#EDE8D6; --tinta-suave:#A7AB97;
+    --tarjeta:#22271C; --campo:#181C13; --textura:none;
+    --linea:rgba(237,232,214,.13);
+    --sombra:0 30px 60px -24px rgba(0,0,0,.7),0 8px 18px -10px rgba(0,0,0,.5);
+    --sombra-chica:0 1px 0 rgba(255,255,255,.04) inset,0 10px 24px -16px rgba(0,0,0,.7);
+    --alerta:#F08A62; --acento:var(--terracota-claro);
+    --aviso-fondo:#EDE8D6; --aviso-texto:#161a12;
+    --flecha:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%23EDE8D6' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+    color-scheme:dark;
+  }
+}
+:root[data-tema="oscuro"]{
+  --papel:#1C2017; --papel-2:#272C20; --papel-3:#363C2D;
+  --tinta:#EDE8D6; --tinta-suave:#A7AB97;
+  --tarjeta:#22271C; --campo:#181C13; --textura:none;
+  --linea:rgba(237,232,214,.13);
+  --sombra:0 30px 60px -24px rgba(0,0,0,.7),0 8px 18px -10px rgba(0,0,0,.5);
+  --sombra-chica:0 1px 0 rgba(255,255,255,.04) inset,0 10px 24px -16px rgba(0,0,0,.7);
+  --alerta:#F08A62; --acento:var(--terracota-claro);
+  --aviso-fondo:#EDE8D6; --aviso-texto:#161a12;
+  --flecha:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%23EDE8D6' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  color-scheme:dark;
+}
+
+/* Cambio de tema: el tema nuevo se abre en un círculo desde el botón
+   (app.js guarda en --tx y --ty el centro del botón que tocaste) */
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-new(root){animation:tema-circulo .65s var(--suave)}
+@keyframes tema-circulo{from{clip-path:circle(0 at var(--tx,50%) var(--ty,50%))}to{clip-path:circle(150vmax at var(--tx,50%) var(--ty,50%))}}
 
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -40,7 +83,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 input,select,textarea{font:inherit;color:inherit}
 svg{display:block}
 [hidden]{display:none!important}
-:focus-visible{outline:3px solid var(--terracota-osc);outline-offset:3px;border-radius:6px}
+:focus-visible{outline:3px solid var(--alerta);outline-offset:3px;border-radius:6px}
 .sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .mono{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase}
 .suave{color:var(--tinta-suave)}
@@ -77,7 +120,15 @@ svg{display:block}
 .icono{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:0;background:transparent;transition:background-color .2s,transform .2s var(--suave)}
 .icono:hover{background:var(--papel-2);transform:scale(1.08)}
 .icono svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.icono.peligro:hover{background:rgba(193,80,46,.12);color:var(--terracota-osc)}
+.icono.peligro:hover{background:rgba(193,80,46,.12);color:var(--alerta)}
+
+/* Botón de tema: con tema claro muestra la luna (pasar a oscuro) y al revés */
+.boton-tema .sol,.boton-tema.es-oscuro .luna{display:none}
+.boton-tema.es-oscuro .sol{display:block}
+.boton-tema svg{animation:tema-icono .5s var(--rebote)}
+@keyframes tema-icono{from{opacity:0;transform:rotate(-90deg) scale(.5)}to{opacity:1;transform:none}}
+.lateral .icono:hover{background:rgba(243,239,225,.1)}
+.acceso-tema{position:absolute;top:18px;right:18px;z-index:2;width:42px;height:42px;border:1.5px solid var(--linea)}
 
 /* ============ Campos ============ */
 .campo{display:grid;gap:6px;margin-top:16px}
@@ -86,14 +137,15 @@ svg{display:block}
 .campo textarea{min-height:90px;resize:vertical}
 .campo input:focus,.campo select:focus,.campo textarea:focus{outline:none;border-color:var(--terracota);box-shadow:0 0 0 4px rgba(193,80,46,.15)}
 .campo small{font-size:12.5px}
+.opcional{font-weight:400;opacity:.75}
 .campos-2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-.error-form{min-height:0;color:var(--terracota-osc);font-size:14px;font-weight:600}
+.error-form{min-height:0;color:var(--alerta);font-size:14px;font-weight:600}
 .error-form:not(:empty){margin-top:14px;padding:10px 14px;border-radius:12px;background:rgba(193,80,46,.1);animation:sacudir .4s}
 @keyframes sacudir{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
 
 /* ============ Acceso ============ */
 .acceso{display:grid;grid-template-columns:1.1fr 1fr;min-height:100vh}
-.acceso-escena{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(28px,5vw,64px);background:radial-gradient(120% 80% at 70% 18%,rgba(231,166,75,.28),transparent 55%),radial-gradient(90% 70% at 10% 100%,rgba(62,98,89,.55),transparent 60%),var(--noche);color:var(--papel);isolation:isolate}
+.acceso-escena{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(28px,5vw,64px);background:radial-gradient(120% 80% at 70% 18%,rgba(231,166,75,.28),transparent 55%),radial-gradient(90% 70% at 10% 100%,rgba(62,98,89,.55),transparent 60%),var(--noche);color:#F3EFE1;isolation:isolate}
 .acceso-escena::after{content:"";position:absolute;inset:0;background:url(papel.png);opacity:.06;mix-blend-mode:screen;pointer-events:none;z-index:-1}
 .acceso-marca{opacity:.75}
 .acceso-brote{position:absolute;right:-4%;top:50%;width:min(62%,460px);height:auto;aspect-ratio:340/350;translate:0 -55%;filter:drop-shadow(0 0 40px rgba(224,122,82,.35));animation:mecer 7s ease-in-out 2.2s infinite}
@@ -107,7 +159,7 @@ svg{display:block}
 .polen i{position:absolute;bottom:-10px;width:var(--t);height:var(--t);border-radius:50%;background:radial-gradient(circle,rgba(255,226,160,.95),rgba(231,166,75,0) 70%);animation:flotar var(--d) linear var(--r) infinite;opacity:0}
 @keyframes flotar{0%{transform:translate(0,0);opacity:0}10%{opacity:.9}90%{opacity:.7}100%{transform:translate(var(--x),-105vh);opacity:0}}
 
-.acceso-panel{display:grid;place-items:center;padding:32px 16px}
+.acceso-panel{position:relative;display:grid;place-items:center;padding:72px 16px 32px}
 .acceso-caja{width:min(100%,400px);animation:subir .8s var(--suave) .2s both}
 .acceso-caja h2{font-size:44px;margin-top:30px}
 .acceso-caja .suave{margin-top:6px}
@@ -120,13 +172,13 @@ svg{display:block}
 
 /* ============ Estructura del panel ============ */
 .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh;animation:aparecer .6s var(--suave) both}
-.lateral{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:28px;padding:26px 18px;background:radial-gradient(140% 50% at 0% 0%,rgba(231,166,75,.14),transparent 60%),var(--noche);color:var(--papel)}
+.lateral{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:28px;padding:26px 18px;background:radial-gradient(140% 50% at 0% 0%,rgba(231,166,75,.14),transparent 60%),var(--noche);color:#F3EFE1}
 .lateral-logo{display:flex;align-items:center;gap:10px;text-decoration:none;padding:0 8px;font:400 27px/1 var(--serif)}
 .lateral-logo em{color:var(--dorado)}
 .brote-mini{width:34px;height:35px;--b-sol:var(--dorado);--b-trazo:var(--terracota-claro);--b-grosor:34}
 .menu{position:relative;display:grid;gap:4px}
 .menu a{position:relative;z-index:1;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;text-decoration:none;font-weight:600;font-size:15px;color:rgba(243,239,225,.62);transition:color .25s}
-.menu a:hover{color:var(--papel)}
+.menu a:hover{color:#F3EFE1}
 .menu a.activa{color:#161a12}
 .menu svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round;transition:transform .35s var(--rebote)}
 .menu a:hover svg{transform:scale(1.12) rotate(-4deg)}
@@ -139,7 +191,7 @@ svg{display:block}
 .contenido{min-width:0;padding:clamp(22px,4vw,48px) clamp(16px,4vw,56px) 80px}
 .cabecera{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:30px}
 .cabecera h1{font-size:clamp(46px,6vw,72px);margin-top:6px}
-.cabecera h1 em{color:var(--terracota)}
+.cabecera h1 em{color:var(--acento)}
 .vista.cambia{animation:vista .55s var(--suave) both}
 @keyframes vista{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes subir{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
@@ -147,7 +199,7 @@ svg{display:block}
 .entra{animation:subir .6s var(--suave) both;animation-delay:calc(var(--i,0) * 55ms)}
 /* Al refrescar después de guardar algo, la vista no se vuelve a animar entera */
 .vista.quieta .entra{animation:none}
-.vista.quieta .barra i,.vista.quieta .anillo .valor{transition:none}
+.vista.quieta .barra i,.vista.quieta .anillo .valor,.vista.quieta .mes i{transition:none}
 
 /* ============ Tarjetas ============ */
 .tarjeta{position:relative;background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--radio);padding:22px;box-shadow:var(--sombra-chica)}
@@ -189,6 +241,33 @@ svg{display:block}
 .leyenda span{display:flex;align-items:center;gap:7px}
 .leyenda span::before{content:"";width:12px;height:12px;border-radius:4px;background:var(--c)}
 
+/* Fila de abajo del resumen: el gráfico ocupa más que las entregas */
+.resumen-bajo{grid-template-columns:1.25fr minmax(280px,.75fr)}
+.resumen-bajo h3+.suave{margin-top:4px;font-size:14px}
+
+/* Gráfico de cobros por mes: cada .mes es una columna con el valor (b),
+   la barra (i, su alto lo pone app.js) y el nombre del mes (span) */
+.meses{--alto:190px;display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(3px,.8vw,10px);height:var(--alto);margin-top:22px;padding-bottom:24px;
+  background:repeating-linear-gradient(to top,var(--linea) 0 1px,transparent 1px calc((var(--alto) - 24px) / 4)) 0 0/100% calc(100% - 24px) no-repeat}
+.mes{position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0;padding-top:20px}
+.mes b{font:400 10px/1 var(--mono);color:var(--tinta-suave);white-space:nowrap;margin-bottom:5px;opacity:0;transition:opacity .4s;transition-delay:calc(1s + var(--i,0) * 50ms)}
+.mes i{flex:none;display:block;width:100%;max-width:34px;height:0;border-radius:7px 7px 3px 3px;background:linear-gradient(to top,var(--verde),var(--verde-claro));transform-origin:bottom;transition:height 1s var(--suave),filter .2s,transform .3s var(--rebote);transition-delay:calc(.3s + var(--i,0) * 50ms),0s,0s}
+.mes span{position:absolute;bottom:-24px;left:0;right:0;text-align:center;font:400 10.5px/24px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--tinta-suave)}
+.mes.actual i{background:linear-gradient(to top,var(--terracota),var(--terracota-claro));box-shadow:0 10px 22px -12px rgba(193,80,46,.9)}
+.mes.actual span{color:var(--tinta);font-weight:700}
+.mes:hover i{filter:brightness(1.12);transform:scaleX(1.08)}
+.meses:has(i[style]) .mes b{opacity:1}
+.vista.quieta .mes b{transition:none}
+
+/* Próximas entregas */
+.fila-entrega{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--linea)}
+.fila-entrega:last-child{border-bottom:0}
+.chip.entrega{--c:var(--azul)}
+.chip.entrega.pronto{--c:var(--dorado);background:rgba(231,166,75,.18);color:var(--tinta)}
+.chip.entrega.atrasado{--c:var(--terracota);background:rgba(193,80,46,.14);color:var(--alerta)}
+.chip.entrega.atrasado::before{animation:latir 1.6s ease-in-out infinite}
+@keyframes latir{50%{transform:scale(1.5);opacity:.6}}
+
 .lista{display:grid;margin-top:8px}
 .fila-pago{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:14px 4px;border-bottom:1px solid var(--linea);transition:background-color .2s,padding .3s var(--suave)}
 .fila-pago:last-child{border-bottom:0}
@@ -196,10 +275,14 @@ svg{display:block}
 .fecha-chip{display:grid;place-items:center;width:52px;height:56px;border-radius:14px;background:var(--papel-2);line-height:1}
 .fecha-chip b{font:400 24px/1 var(--serif)}
 .fecha-chip span{font:400 10px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-top:3px;color:var(--tinta-suave)}
-.fila-pago .titulo{font-weight:600}
-.fila-pago .detalle{font-size:13.5px;color:var(--tinta-suave);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fila-pago.con-acciones{grid-template-columns:auto 1fr auto auto}
+.fila-pago .titulo,.fila-entrega .titulo{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fila-pago .detalle,.fila-entrega .detalle{font-size:13.5px;color:var(--tinta-suave);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fila-pago .monto{font:400 24px/1 var(--serif);white-space:nowrap;text-align:right}
-.fila-pago .acciones{display:flex;justify-content:flex-end}
+.fila-pago .acciones{display:flex;justify-content:flex-end;gap:2px;opacity:.55;transition:opacity .2s}
+.fila-pago:hover .acciones,.fila-pago:focus-within .acciones{opacity:1}
+/* En pantallas táctiles no hay hover: los botones se ven siempre */
+@media (hover:none){.fila-pago .acciones,.cliente-pie .acciones,.proyecto-pie .acciones{opacity:1}}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font:600 12px/1.3 var(--sans);background:var(--papel-2);color:var(--tinta-suave);white-space:nowrap}
 .chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c,var(--tinta-suave))}
 
@@ -240,7 +323,7 @@ svg{display:block}
 .proyecto h3{font-size:27px;overflow-wrap:anywhere}
 .proyecto .cliente-nombre{font-size:14px;color:var(--tinta-suave);margin-top:4px}
 .proyecto .descripcion{font-size:14px;color:var(--tinta-suave);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.selector-estado{appearance:none;border:0;border-radius:999px;padding:6px 28px 6px 12px;font:600 12.5px/1.3 var(--sans);background:var(--papel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%2323281C' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 8px center/14px;cursor:pointer;transition:background-color .2s}
+.selector-estado{appearance:none;border:0;border-radius:999px;padding:6px 28px 6px 12px;font:600 12.5px/1.3 var(--sans);background:var(--papel-2) var(--flecha) no-repeat right 8px center/14px;cursor:pointer;transition:background-color .2s}
 .selector-estado:hover{background-color:var(--papel-3)}
 .progreso header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13.5px;color:var(--tinta-suave)}
 .progreso header strong{font:400 22px/1 var(--serif);color:var(--tinta)}
@@ -291,7 +374,7 @@ svg{display:block}
 
 /* ============ Avisos (toasts) ============ */
 .avisos{position:fixed;right:20px;bottom:20px;z-index:50;display:grid;gap:10px;justify-items:end;pointer-events:none}
-.aviso{display:flex;align-items:center;gap:10px;max-width:min(380px,calc(100vw - 40px));padding:13px 18px;border-radius:16px;background:var(--noche);color:var(--papel);font-size:14.5px;font-weight:600;box-shadow:var(--sombra);animation:aviso-entra .5s var(--rebote) both;pointer-events:auto}
+.aviso{display:flex;align-items:center;gap:10px;max-width:min(380px,calc(100vw - 40px));padding:13px 18px;border-radius:16px;background:var(--aviso-fondo);color:var(--aviso-texto);font-size:14.5px;font-weight:600;box-shadow:var(--sombra);animation:aviso-entra .5s var(--rebote) both;pointer-events:auto}
 .aviso::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:var(--verde-claro);box-shadow:0 0 0 4px rgba(110,154,140,.25)}
 .aviso.error::before{background:var(--terracota-claro);box-shadow:0 0 0 4px rgba(224,122,82,.25)}
 .aviso.sale{animation:aviso-sale .3s ease-in forwards}
@@ -308,6 +391,13 @@ svg{display:block}
   .kpis .kpi:last-child{grid-column:1/-1}
   .resumen-medio{grid-template-columns:1fr}
 }
+/* Instalada como app: que nada quede debajo de la barra de estado del celu */
+@media (display-mode:standalone){
+  .contenido{padding-top:max(clamp(22px,4vw,48px),calc(env(safe-area-inset-top) + 12px))}
+  .acceso-escena{padding-top:max(28px,calc(env(safe-area-inset-top) + 16px))}
+  body{-webkit-tap-highlight-color:transparent}
+  .menu a,.btn,.filtro{-webkit-user-select:none;user-select:none}
+}
 @media (max-width:860px){
   .acceso{grid-template-columns:1fr}
   .acceso-escena{min-height:46vh}
@@ -319,9 +409,10 @@ svg{display:block}
   .menu{flex:1;grid-template-columns:repeat(4,1fr);gap:2px}
   .menu a{flex-direction:column;gap:4px;padding:8px 4px;font-size:11.5px;text-align:center}
   .menu-marca{height:auto;bottom:0;width:25%}
-  .lateral-pie{margin:0;padding:0 0 0 8px;border:0;flex-direction:column;gap:2px}
+  .lateral-pie{margin:0;padding:0 0 0 6px;border:0;flex-direction:column;gap:0}
+  .lateral-pie .usuario{display:none}
   .lateral-pie .btn-texto{font-size:11.5px;padding:0}
-  .lateral-pie .avatar{width:28px;height:28px;font-size:11px}
+  .lateral-pie .boton-tema{width:32px;height:32px}
   .contenido{padding-bottom:120px}
   .avisos{bottom:96px;right:12px}
 }
@@ -334,6 +425,10 @@ svg{display:block}
   .fila-pago .monto{grid-column:2;text-align:left;font-size:21px}
   .fila-pago.con-acciones .acciones{grid-column:2;justify-content:flex-start;margin-left:-8px}
   .selector{min-width:0;width:100%}
+  .meses{--alto:160px}
+  .mes b{display:none}
+  .mes span{font-size:9px;letter-spacing:0}
+  .acceso-tema{top:12px;right:12px}
   .total-pagos{margin-left:0}
 }
 
