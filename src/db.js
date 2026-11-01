@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ quiet: true }); // quiet: sin el aviso de dotenv en consola
 const mysql = require('mysql2/promise');
 
 // Pool de conexiones reutilizables a MySQL

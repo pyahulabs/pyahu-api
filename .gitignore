@@ -1,2 +1,14 @@
-node_modules
+# Dependencias (se reinstalan con npm install)
+node_modules/
+
+# Configuración local con contraseñas: nunca se sube
 .env
+.env.*
+!.env.example
+
+# Logs y archivos del sistema o del editor
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.claude/
