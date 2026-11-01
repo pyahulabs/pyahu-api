@@ -1,0 +1,16 @@
+{
+  "name": "Pyahu Labs · Gestión",
+  "short_name": "Pyahu",
+  "description": "Clientes, proyectos y cobros de Pyahu Labs.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#161a12",
+  "theme_color": "#161a12",
+  "icons": [
+    { "src": "/iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/iconos/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

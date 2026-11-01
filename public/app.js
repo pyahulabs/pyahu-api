@@ -178,9 +178,10 @@ function entrar() {
   if (!usuario) return cerrarSesion();
   $('#acceso').hidden = true;
   $('#app').hidden = false;
-  $('#usuario-email').textContent = usuario.email;
+  $('#usuario-email').textContent = usuario.nombre || usuario.email;
+  $('#usuario-email').title = usuario.email;
   const av = $('#usuario-avatar');
-  av.textContent = iniciales(usuario.email);
+  av.textContent = iniciales(usuario.nombre || usuario.email);
   av.style.setProperty('--c', colorDe(usuario.email));
   $('#vista-fecha').textContent = new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' });
   estado.vista = vistaDelHash();
@@ -193,9 +194,9 @@ const vistaDelHash = () => (VISTAS[location.hash.slice(1)] ? location.hash.slice
 
 async function cargarTodo(animar = false) {
   try {
-    const [clientes, proyectos, pagos, resumen] = await Promise.all(
-      ['/clientes', '/proyectos', '/pagos', '/resumen'].map((r) => api(r)));
-    estado.datos = { clientes, proyectos, pagos, resumen };
+    const [clientes, proyectos, pagos, resumen, mensual] = await Promise.all(
+      ['/clientes', '/proyectos', '/pagos', '/resumen', '/resumen/mensual?meses=12'].map((r) => api(r)));
+    estado.datos = { clientes, proyectos, pagos, resumen, mensual };
     pintar(animar);
   } catch (err) {
     if (estado.token) avisar(err.message, 'error');
@@ -229,6 +230,7 @@ function pintar(animar) {
 function animarVista(vista, animar) {
   const aplicar = () => {
     $$('[data-ancho]', vista).forEach((el) => { el.style.width = el.dataset.ancho; });
+    $$('[data-alto]', vista).forEach((el) => { el.style.height = el.dataset.alto; });
     $$('[data-anillo]', vista).forEach((el) => { el.style.strokeDashoffset = 1 - Number(el.dataset.anillo); });
     $$('[data-contar]', vista).forEach((el) => contar(el, animar));
   };
@@ -315,23 +317,113 @@ function vistaResumen() {
         <div class="leyenda"><span style="--c:var(--verde)">Cobrado</span><span style="--c:var(--terracota)">Pendiente</span><span style="--c:var(--dorado)">Presupuestado</span></div>
       </article>
     </div>
-    <article class="tarjeta entra" style="--i:5;margin-top:18px">
+    <div class="grilla resumen-medio resumen-bajo">
+      <article class="tarjeta entra" style="--i:5">
+        <h3>Cobrado por mes</h3>
+        ${graficoMeses()}
+      </article>
+      <article class="tarjeta entra" style="--i:6">
+        <h3>Próximas entregas</h3>
+        ${proximasEntregas()}
+      </article>
+    </div>
+    <article class="tarjeta entra" style="--i:7;margin-top:18px">
       <h3>Últimos pagos</h3>
       <div class="lista">${ultimos || '<p class="suave" style="padding:16px 4px">Todavía no registraste pagos.</p>'}</div>
     </article>`;
 }
 
-function filaPago(p, i) {
+// Barras de los últimos 12 meses; la del mes actual va en terracota
+function graficoMeses() {
+  const meses = estado.datos.mensual;
+  const maximo = Math.max(1, ...meses.map((m) => m.cobrado));
+  const total = meses.reduce((t, m) => t + m.cobrado, 0);
+  const barras = meses.map((m, i) => {
+    const nombre = new Date(`${m.mes}-15T12:00:00`).toLocaleDateString('es-PY', { month: 'short' }).replace('.', '');
+    return `<div class="mes ${i === meses.length - 1 ? 'actual' : ''}" style="--i:${i}" title="${nombre}: ${gs(m.cobrado)} en ${plural(m.pagos, 'pago', 'pagos')}">
+      <b>${m.cobrado ? numeroCorto(m.cobrado) : ''}</b>
+      <i data-alto="${Math.max(m.cobrado ? 4 : 0, (m.cobrado / maximo) * 100)}%"></i>
+      <span>${nombre}</span>
+    </div>`;
+  }).join('');
+  return `<p class="suave">${gs(total)} en los últimos 12 meses</p><div class="meses">${barras}</div>`;
+}
+
+// 1.500.000 → "1,5 M"; 850.000 → "850 mil"
+const numeroCorto = (n) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('es-PY', { maximumFractionDigits: 1 })} M` : `${Math.round(n / 1e3)} mil`);
+
+const diasHasta = (f) => { const hoy = new Date(); hoy.setHours(12, 0, 0, 0); return Math.round((fecha(f) - hoy) / 864e5); };
+
+function chipEntrega(p) {
+  if (!p.fecha_entrega || p.estado === 'entregado' || p.estado === 'cancelado') return '';
+  const d = diasHasta(p.fecha_entrega);
+  const [texto, tipo] = d < 0 ? [`Atrasado ${plural(-d, 'día', 'días')}`, 'atrasado']
+    : d === 0 ? ['Se entrega hoy', 'pronto']
+    : d <= 7 ? [`Entrega en ${plural(d, 'día', 'días')}`, 'pronto']
+    : [`Entrega ${fecha(p.fecha_entrega).toLocaleDateString('es-PY', { day: 'numeric', month: 'short' })}`, ''];
+  return `<span class="chip entrega ${tipo}">${texto}</span>`;
+}
+
+function proximasEntregas() {
+  const lista = estado.datos.proyectos
+    .filter((p) => p.fecha_entrega && (p.estado === 'en_curso' || p.estado === 'presupuesto'))
+    .sort((a, b) => a.fecha_entrega.localeCompare(b.fecha_entrega))
+    .slice(0, 5);
+  if (!lista.length) return '<p class="suave" style="margin-top:12px">Ningún proyecto activo tiene fecha de entrega. Agregala al editar un proyecto.</p>';
+  return `<div class="lista">${lista.map((p, i) => `
+    <div class="fila-entrega entra" style="--i:${i}">
+      <div style="min-width:0"><p class="titulo">${esc(p.nombre)}</p><p class="detalle">${esc(p.cliente)}</p></div>
+      ${chipEntrega(p)}
+    </div>`).join('')}</div>`;
+}
+
+function filaPago(p, i, conAcciones = false) {
   const proyecto = estado.datos.proyectos.find((x) => x.id === p.proyecto_id);
   const d = fecha(p.fecha);
-  return `<div class="fila-pago entra" style="--i:${Math.min(i, 12)}">
+  return `<div class="fila-pago entra ${conAcciones ? 'con-acciones' : ''}" style="--i:${Math.min(i, 12)}">
     <div class="fecha-chip"><b>${d.getDate()}</b><span>${d.toLocaleDateString('es-PY', { month: 'short' }).replace('.', '')}</span></div>
     <div style="min-width:0">
       <p class="titulo">${esc(proyecto ? proyecto.nombre : 'Proyecto borrado')}</p>
       <p class="detalle">${esc(proyecto ? proyecto.cliente : '')} · ${METODOS[p.metodo]}${p.nota ? ` · ${esc(p.nota)}` : ''}</p>
     </div>
     <p class="monto">${gs(p.monto)}</p>
+    ${conAcciones ? `<div class="acciones">
+      <button class="icono" data-accion="editar-pago" data-id="${p.id}" aria-label="Editar pago de ${gs(p.monto)}">${ICONOS.editar}</button>
+      <button class="icono peligro" data-accion="borrar-pago" data-id="${p.id}" aria-label="Borrar pago de ${gs(p.monto)}">${ICONOS.borrar}</button>
+    </div>` : ''}
   </div>`;
+}
+
+// ---------- Exportar a CSV (se abre en Excel) ----------
+function descargarCSV(nombre, encabezados, filas) {
+  const celda = (v) => {
+    const s = String(v ?? '');
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  // Punto y coma y BOM: así Excel en español separa bien las columnas y respeta las tildes
+  const csv = '﻿' + [encabezados, ...filas].map((f) => f.map(celda).join(';')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `${nombre}-${hoyISO()}.csv` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  avisar(`Descargado ${a.download}`);
+}
+
+function exportar(que) {
+  const { proyectos, pagos } = estado.datos;
+  if (que === 'proyectos') {
+    descargarCSV('proyectos', ['ID', 'Proyecto', 'Cliente', 'Estado', 'Monto total', 'Cobrado', 'Saldo', 'Entrega'],
+      proyectos.map((p) => [p.id, p.nombre, p.cliente, ESTADOS[p.estado].nombre, p.monto_total, p.pagado, p.saldo, p.fecha_entrega || '']));
+  } else {
+    const lista = pagos.filter((p) => !estado.filtroPagos || p.proyecto_id === Number(estado.filtroPagos));
+    descargarCSV('pagos', ['ID', 'Fecha', 'Proyecto', 'Cliente', 'Monto', 'Método', 'Nota'],
+      lista.map((p) => {
+        const pr = proyectos.find((x) => x.id === p.proyecto_id) || {};
+        return [p.id, p.fecha, pr.nombre, pr.cliente, p.monto, METODOS[p.metodo], p.nota || ''];
+      }));
+  }
 }
 
 // ---------- Vista: Clientes ----------
@@ -391,7 +483,7 @@ function vistaProyectos() {
       ${e === 'todos' ? 'Todos' : ESTADOS[e].nombre}<b>${cuenta(e)}</b></button>`).join('');
   const lista = proyectos.filter((p) => estado.filtroProyectos === 'todos' || p.estado === estado.filtroProyectos);
   return `
-    <div class="herramientas"><div class="filtros">${filtros}</div></div>
+    <div class="herramientas"><div class="filtros">${filtros}</div>${BOTON_CSV('proyectos')}</div>
     <div class="grilla grilla-proyectos">
       ${lista.map(tarjetaProyecto).join('') || '<p class="suave">No hay proyectos en este estado.</p>'}
     </div>`;
@@ -407,6 +499,7 @@ function tarjetaProyecto(p, i) {
       <select class="selector-estado" data-accion="estado" data-id="${p.id}" aria-label="Estado de ${esc(p.nombre)}">${opciones}</select>
     </div>
     ${p.descripcion ? `<p class="descripcion">${esc(p.descripcion)}</p>` : ''}
+    ${chipEntrega(p) ? `<div>${chipEntrega(p)}</div>` : ''}
     <div class="progreso">
       <header><span><strong>${gs(p.pagado)}</strong> de ${gs(p.monto_total)}</span><span>${Math.round(pct)}%</span></header>
       <div class="barra"><i style="--i:${Math.min(i, 12)}" data-ancho="${pct}%"></i></div>
@@ -440,9 +533,13 @@ function vistaPagos() {
     <div class="herramientas">
       <select class="selector" id="filtro-pagos" aria-label="Filtrar por proyecto"><option value="">Todos los proyectos</option>${opciones}</select>
       <p class="total-pagos"><span class="suave">${plural(lista.length, 'pago', 'pagos')} ·</span><strong>${gs(total)}</strong></p>
+      ${BOTON_CSV('pagos')}
     </div>
-    <article class="tarjeta"><div class="lista">${lista.map(filaPago).join('')}</div></article>`;
+    <article class="tarjeta"><div class="lista">${lista.map((p, i) => filaPago(p, i, true)).join('')}</div></article>`;
 }
+
+const BOTON_CSV = (que) => `<button class="btn btn-linea btn-chico" data-accion="exportar" data-que="${que}">
+  <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Exportar CSV</span></button>`;
 
 // ---------- Modal ----------
 let alEnviarModal = null;
@@ -530,6 +627,7 @@ function formProyecto(p = {}) {
       + campo('Descripción', `<textarea name="descripcion" maxlength="2000">${esc(p.descripcion)}</textarea>`)
       + `<div class="campos-2">${campo('Estado', `<select name="estado">${opcionesEst}</select>`)}
          ${campo('Monto total (₲)', `<input name="monto_total" type="number" min="0" step="1" inputmode="numeric" required value="${p.monto_total ?? ''}">`)}</div>`
+      + campo('Fecha de entrega <span class="opcional">(opcional)</span>', `<input name="fecha_entrega" type="date" value="${esc(p.fecha_entrega)}">`)
       + (p.id && p.pagado ? `<p class="aviso-saldo">Ya se cobraron ${gs(p.pagado)}: el monto total no puede ser menor.</p>` : ''),
     ok: p.id ? 'Guardar cambios' : 'Crear proyecto',
     alEnviar: async (fd) => {
@@ -583,20 +681,46 @@ function formPago(proyectoId) {
   });
 }
 
-function confirmarBorrado(tipo, item) {
-  const esCliente = tipo === 'cliente';
-  const n = esCliente ? estado.datos.proyectos.filter((p) => p.cliente_id === item.id).length : 0;
-  const texto = esCliente
-    ? (n ? `Se van a borrar también sus ${plural(n, 'proyecto', 'proyectos')} y todos sus pagos.` : 'Este cliente no tiene proyectos.')
-    : (item.pagado ? `Se van a borrar también sus pagos (${gs(item.pagado)}).` : 'Este proyecto no tiene pagos.');
+function formEditarPago(pago) {
+  const proyecto = estado.datos.proyectos.find((p) => p.id === pago.proyecto_id);
+  const maximo = proyecto.saldo + pago.monto; // lo que queda libre si este pago no existiera
+  const metodos = Object.entries(METODOS).map(([k, n]) => `<option value="${k}" ${k === pago.metodo ? 'selected' : ''}>${n}</option>`).join('');
   abrirModal({
-    titulo: `¿Borrar <em>${esc(item.nombre)}</em>?`,
+    titulo: 'Editar <em>pago</em>',
+    cuerpo: `<p class="aviso-saldo">${esc(proyecto.nombre)} · ${esc(proyecto.cliente)} · hasta <b>${gs(maximo)}</b></p>`
+      + `<div class="campos-2">${campo('Monto (₲)', `<input name="monto" type="number" min="1" max="${maximo}" step="1" inputmode="numeric" required value="${pago.monto}">`)}
+         ${campo('Fecha', `<input name="fecha" type="date" required value="${esc(pago.fecha)}">`)}</div>`
+      + campo('Método', `<select name="metodo">${metodos}</select>`)
+      + campo('Nota', `<input name="nota" maxlength="255" value="${esc(pago.nota)}">`),
+    ok: 'Guardar cambios',
+    alEnviar: async (fd) => {
+      await api(`/pagos/${pago.id}`, 'PUT', leerForm(fd, ['monto']));
+      return 'Pago actualizado';
+    },
+  });
+}
+
+function confirmarBorrado(tipo, item) {
+  const rutas = { cliente: 'clientes', proyecto: 'proyectos', pago: 'pagos' };
+  let titulo = `¿Borrar <em>${esc(item.nombre)}</em>?`;
+  let texto;
+  if (tipo === 'cliente') {
+    const n = estado.datos.proyectos.filter((p) => p.cliente_id === item.id).length;
+    texto = n ? `Se van a borrar también sus ${plural(n, 'proyecto', 'proyectos')} y todos sus pagos.` : 'Este cliente no tiene proyectos.';
+  } else if (tipo === 'proyecto') {
+    texto = item.pagado ? `Se van a borrar también sus pagos (${gs(item.pagado)}).` : 'Este proyecto no tiene pagos.';
+  } else {
+    titulo = `¿Borrar el pago de <em>${gs(item.monto)}</em>?`;
+    texto = 'El saldo del proyecto vuelve a subir.';
+  }
+  abrirModal({
+    titulo,
     cuerpo: `<p class="confirmar">${texto} No se puede deshacer.</p>`,
     ok: 'Sí, borrar',
     peligro: true,
     alEnviar: async () => {
-      await api(`/${esCliente ? 'clientes' : 'proyectos'}/${item.id}`, 'DELETE');
-      return esCliente ? 'Cliente borrado' : 'Proyecto borrado';
+      await api(`/${rutas[tipo]}/${item.id}`, 'DELETE');
+      return { cliente: 'Cliente borrado', proyecto: 'Proyecto borrado', pago: 'Pago borrado' }[tipo];
     },
   });
 }
@@ -606,8 +730,12 @@ function acciones(e) {
   const el = e.target.closest('[data-accion]');
   if (!el || el.tagName === 'SELECT') return;
   const id = Number(el.dataset.id);
-  const { clientes, proyectos } = estado.datos;
+  const { clientes, proyectos, pagos } = estado.datos;
   switch (el.dataset.accion) {
+    case 'editar-pago': return formEditarPago(pagos.find((p) => p.id === id));
+    case 'borrar-pago': return confirmarBorrado('pago', pagos.find((p) => p.id === id));
+    case 'exportar': return exportar(el.dataset.que);
+    case 'tema': return cambiarTema(el);
     case 'nuevo-cliente': return formCliente();
     case 'editar-cliente': return formCliente(clientes.find((c) => c.id === id));
     case 'borrar-cliente': return confirmarBorrado('cliente', clientes.find((c) => c.id === id));
@@ -660,6 +788,49 @@ function iniciar() {
 
   if (estado.token && leerToken(estado.token)) entrar();
   else { guardado('token', null); estado.token = null; $('#acceso').hidden = false; }
+  configurarRegistro();
+  pintarBotonTema();
+
+  // Service worker: guarda el panel para que abra rápido y se pueda instalar
+  // como app. Solo funciona en https o en localhost (no por la IP de la Wi-Fi)
+  if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// Si el registro está cerrado, la pantalla de acceso muestra solo "Ingresar"
+async function configurarRegistro() {
+  try {
+    const { registro_abierto: abierto } = await api('/auth/config');
+    $('.pestanas').hidden = !abierto;
+    if (!abierto && modoAcceso === 'registro') cambiarModo('login');
+  } catch { /* sin conexión: queda como está */ }
+}
+
+// ---------- Modo oscuro ----------
+// tema.js (en el <head>) ya aplicó la elección guardada antes de pintar la página
+const temaActual = () => document.documentElement.dataset.tema
+  || (matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro');
+
+function pintarBotonTema() {
+  const oscuro = temaActual() === 'oscuro';
+  $$('[data-accion="tema"]').forEach((b) => {
+    b.setAttribute('aria-label', oscuro ? 'Pasar a modo claro' : 'Pasar a modo oscuro');
+    b.classList.toggle('es-oscuro', oscuro);
+  });
+}
+
+function cambiarTema(boton) {
+  const nuevo = temaActual() === 'oscuro' ? 'claro' : 'oscuro';
+  const aplicar = () => {
+    document.documentElement.dataset.tema = nuevo;
+    guardado('tema', nuevo);
+    pintarBotonTema();
+  };
+  // Con View Transitions, el tema nuevo se abre en un círculo desde el botón
+  if (!document.startViewTransition || quieto) return aplicar();
+  const r = boton.getBoundingClientRect();
+  document.documentElement.style.setProperty('--tx', `${r.left + r.width / 2}px`);
+  document.documentElement.style.setProperty('--ty', `${r.top + r.height / 2}px`);
+  document.startViewTransition(aplicar);
 }
 
 iniciar();

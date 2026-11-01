@@ -16,6 +16,8 @@
   --terracota:#C1502E; --terracota-osc:#A3401F; --terracota-claro:#E07A52;
   --dorado:#E7A64B; --verde:#3E6259; --verde-claro:#6E9A8C; --azul:#2E6E8E;
   --tarjeta:#FBF8EE;
+  --campo:#fff;
+  --textura:url(papel.png);
   --linea:rgba(35,40,28,.12);
   --serif:'Instrument Serif',Georgia,serif;
   --sans:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
@@ -29,7 +31,7 @@
 
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;min-height:100vh;background:var(--papel) url(papel.png);color:var(--tinta);font:400 16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
+body{margin:0;min-height:100vh;background:var(--papel) var(--textura);color:var(--tinta);font:400 16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
 h1,h2,h3{font-family:var(--serif);font-weight:400;line-height:1.02;letter-spacing:-.012em;margin:0}
 em{font-style:italic}
 p{margin:0}
@@ -80,7 +82,7 @@ svg{display:block}
 /* ============ Campos ============ */
 .campo{display:grid;gap:6px;margin-top:16px}
 .campo>span{font-size:13px;font-weight:600;color:var(--tinta-suave)}
-.campo input,.campo select,.campo textarea{width:100%;min-height:48px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--linea);background:#fff;transition:border-color .2s,box-shadow .2s}
+.campo input,.campo select,.campo textarea{width:100%;min-height:48px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--linea);background:var(--campo);transition:border-color .2s,box-shadow .2s}
 .campo textarea{min-height:90px;resize:vertical}
 .campo input:focus,.campo select:focus,.campo textarea:focus{outline:none;border-color:var(--terracota);box-shadow:0 0 0 4px rgba(193,80,46,.15)}
 .campo small{font-size:12.5px}
@@ -113,7 +115,7 @@ svg{display:block}
 .pestanas{position:relative;display:grid;grid-template-columns:1fr 1fr;padding:5px;border-radius:999px;background:var(--papel-2)}
 .pestana{position:relative;z-index:1;border:0;background:none;padding:11px;border-radius:999px;font-weight:600;font-size:14.5px;color:var(--tinta-suave);transition:color .3s}
 .pestana.activa{color:var(--tinta)}
-.pestana-marca{position:absolute;top:5px;bottom:5px;left:5px;width:calc(50% - 5px);border-radius:999px;background:#fff;box-shadow:var(--sombra-chica);transition:transform .45s var(--rebote)}
+.pestana-marca{position:absolute;top:5px;bottom:5px;left:5px;width:calc(50% - 5px);border-radius:999px;background:var(--campo);box-shadow:var(--sombra-chica);transition:transform .45s var(--rebote)}
 .pestanas[data-modo="registro"] .pestana-marca{transform:translateX(100%)}
 
 /* ============ Estructura del panel ============ */
@@ -125,10 +127,10 @@ svg{display:block}
 .menu{position:relative;display:grid;gap:4px}
 .menu a{position:relative;z-index:1;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;text-decoration:none;font-weight:600;font-size:15px;color:rgba(243,239,225,.62);transition:color .25s}
 .menu a:hover{color:var(--papel)}
-.menu a.activa{color:var(--noche)}
+.menu a.activa{color:#161a12}
 .menu svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round;transition:transform .35s var(--rebote)}
 .menu a:hover svg{transform:scale(1.12) rotate(-4deg)}
-.menu-marca{position:absolute;left:0;right:0;top:0;height:46px;border-radius:14px;background:var(--papel);box-shadow:0 10px 26px -12px rgba(231,166,75,.6);transition:transform .5s var(--rebote),opacity .3s;opacity:0}
+.menu-marca{position:absolute;left:0;right:0;top:0;height:46px;border-radius:14px;background:#F3EFE1;box-shadow:0 10px 26px -12px rgba(231,166,75,.6);transition:transform .5s var(--rebote),opacity .3s;opacity:0}
 .lateral-pie{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 8px 0;border-top:1px solid rgba(243,239,225,.12)}
 .usuario{display:flex;align-items:center;gap:10px;min-width:0}
 .usuario-email{font-size:13px;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -330,7 +332,7 @@ svg{display:block}
   .cabecera .btn{width:50px;height:50px;padding:0}
   .fila-pago{grid-template-columns:auto 1fr;gap:4px 14px}
   .fila-pago .monto{grid-column:2;text-align:left;font-size:21px}
-  .fila-pago .acciones{display:none}
+  .fila-pago.con-acciones .acciones{grid-column:2;justify-content:flex-start;margin-left:-8px}
   .selector{min-width:0;width:100%}
   .total-pagos{margin-left:0}
 }
