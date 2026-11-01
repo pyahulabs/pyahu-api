@@ -1,5 +1,16 @@
 const router = require('express').Router();
 const db = require('../db');
+const { validarBody, idValido } = require('../middleware/validar');
+
+const CLIENTE = {
+  nombre: { tipo: 'texto', max: 150, obligatorio: true },
+  email: { tipo: 'email' },
+  telefono: { tipo: 'texto', patron: /^[0-9+()\s-]{6,30}$/, mensaje: 'solo admite números, espacios, +, - y paréntesis (6 a 30)' },
+  // RUC paraguayo (1234567-8) o solo el número de cédula
+  ruc_ci: { tipo: 'texto', patron: /^\d{3,12}(-\d)?$/, mensaje: 'debe ser un número de CI o un RUC como 1234567-8' },
+};
+
+router.param('id', idValido);
 
 router.get('/', async (req, res, next) => {
   try {
@@ -16,10 +27,9 @@ router.get('/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', validarBody(CLIENTE), async (req, res, next) => {
   try {
-    const { nombre, email = null, telefono = null, ruc_ci = null } = req.body;
-    if (!nombre) return res.status(400).json({ error: 'nombre es obligatorio' });
+    const { nombre, email, telefono, ruc_ci } = req.datos;
     const [r] = await db.execute(
       'INSERT INTO clientes (nombre, email, telefono, ruc_ci) VALUES (?, ?, ?, ?)',
       [nombre, email, telefono, ruc_ci]);
@@ -27,10 +37,9 @@ router.post('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validarBody(CLIENTE), async (req, res, next) => {
   try {
-    const { nombre, email = null, telefono = null, ruc_ci = null } = req.body;
-    if (!nombre) return res.status(400).json({ error: 'nombre es obligatorio' });
+    const { nombre, email, telefono, ruc_ci } = req.datos;
     const [r] = await db.execute(
       'UPDATE clientes SET nombre=?, email=?, telefono=?, ruc_ci=? WHERE id=?',
       [nombre, email, telefono, ruc_ci, req.params.id]);

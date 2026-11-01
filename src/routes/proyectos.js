@@ -1,7 +1,22 @@
 const router = require('express').Router();
 const db = require('../db');
+const { validarBody, idValido, MONTO_MAX } = require('../middleware/validar');
 
 const ESTADOS = ['presupuesto', 'en_curso', 'entregado', 'cancelado'];
+
+const PROYECTO = {
+  cliente_id: { tipo: 'entero', min: 1, obligatorio: true },
+  nombre: { tipo: 'texto', max: 150, obligatorio: true },
+  descripcion: { tipo: 'texto', max: 2000 },
+  estado: { tipo: 'opcion', opciones: ESTADOS, porDefecto: 'presupuesto' },
+  monto_total: { tipo: 'entero', min: 0, max: MONTO_MAX, porDefecto: 0 },
+};
+
+const CAMBIO_ESTADO = {
+  estado: { tipo: 'opcion', opciones: ESTADOS, obligatorio: true },
+};
+
+router.param('id', idValido);
 
 // Lista de proyectos con lo pagado y el saldo pendiente
 router.get('/', async (req, res, next) => {
@@ -18,12 +33,9 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', validarBody(PROYECTO), async (req, res, next) => {
   try {
-    const { cliente_id, nombre, descripcion = null, estado = 'presupuesto', monto_total = 0 } = req.body;
-    if (!cliente_id || !nombre) return res.status(400).json({ error: 'cliente_id y nombre son obligatorios' });
-    if (!ESTADOS.includes(estado)) return res.status(400).json({ error: `estado debe ser: ${ESTADOS.join(', ')}` });
-    if (!(monto_total >= 0)) return res.status(400).json({ error: 'monto_total inválido' });
+    const { cliente_id, nombre, descripcion, estado, monto_total } = req.datos;
     const [r] = await db.execute(
       'INSERT INTO proyectos (cliente_id, nombre, descripcion, estado, monto_total) VALUES (?, ?, ?, ?, ?)',
       [cliente_id, nombre, descripcion, estado, monto_total]);
@@ -34,10 +46,9 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/estado', async (req, res, next) => {
+router.patch('/:id/estado', validarBody(CAMBIO_ESTADO), async (req, res, next) => {
   try {
-    const { estado } = req.body;
-    if (!ESTADOS.includes(estado)) return res.status(400).json({ error: `estado debe ser: ${ESTADOS.join(', ')}` });
+    const { estado } = req.datos;
     const [r] = await db.execute('UPDATE proyectos SET estado=? WHERE id=?', [estado, req.params.id]);
     if (!r.affectedRows) return res.status(404).json({ error: 'Proyecto no encontrado' });
     res.json({ id: Number(req.params.id), estado });
