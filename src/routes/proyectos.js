@@ -10,6 +10,7 @@ const PROYECTO = {
   descripcion: { tipo: 'texto', max: 2000 },
   estado: { tipo: 'opcion', opciones: ESTADOS, porDefecto: 'presupuesto' },
   monto_total: { tipo: 'entero', min: 0, max: MONTO_MAX, porDefecto: 0 },
+  fecha_entrega: { tipo: 'fecha' },
 };
 
 // El PUT reemplaza el proyecto entero: estado y monto_total no pueden faltar,
@@ -43,11 +44,11 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', validarBody(PROYECTO), async (req, res, next) => {
   try {
-    const { cliente_id, nombre, descripcion, estado, monto_total } = req.datos;
+    const { cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega } = req.datos;
     const [r] = await db.execute(
-      'INSERT INTO proyectos (cliente_id, nombre, descripcion, estado, monto_total) VALUES (?, ?, ?, ?, ?)',
-      [cliente_id, nombre, descripcion, estado, monto_total]);
-    res.status(201).json({ id: r.insertId, cliente_id, nombre, descripcion, estado, monto_total });
+      'INSERT INTO proyectos (cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega) VALUES (?, ?, ?, ?, ?, ?)',
+      [cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega]);
+    res.status(201).json({ id: r.insertId, cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega });
   } catch (e) {
     if (e.code === 'ER_NO_REFERENCED_ROW_2') return res.status(400).json({ error: 'El cliente no existe' });
     next(e);
@@ -57,7 +58,7 @@ router.post('/', validarBody(PROYECTO), async (req, res, next) => {
 // Edita un proyecto. Con transacción, para que el monto total nunca quede
 // por debajo de lo ya cobrado (POST /pagos bloquea la misma fila)
 router.put('/:id', validarBody(PROYECTO_EDICION), async (req, res, next) => {
-  const { cliente_id, nombre, descripcion, estado, monto_total } = req.datos;
+  const { cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega } = req.datos;
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -70,10 +71,10 @@ router.put('/:id', validarBody(PROYECTO_EDICION), async (req, res, next) => {
       return res.status(400).json({ error: 'monto_total no puede ser menor a lo ya cobrado', pagado });
     }
     await conn.execute(
-      'UPDATE proyectos SET cliente_id=?, nombre=?, descripcion=?, estado=?, monto_total=? WHERE id=?',
-      [cliente_id, nombre, descripcion, estado, monto_total, req.params.id]);
+      'UPDATE proyectos SET cliente_id=?, nombre=?, descripcion=?, estado=?, monto_total=?, fecha_entrega=? WHERE id=?',
+      [cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega, req.params.id]);
     await conn.commit();
-    res.json({ id: Number(req.params.id), cliente_id, nombre, descripcion, estado, monto_total, pagado, saldo: monto_total - pagado });
+    res.json({ id: Number(req.params.id), cliente_id, nombre, descripcion, estado, monto_total, fecha_entrega, pagado, saldo: monto_total - pagado });
   } catch (e) {
     await conn.rollback();
     if (e.code === 'ER_NO_REFERENCED_ROW_2') return res.status(400).json({ error: 'El cliente no existe' });
