@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pyahu Labs · Gestión</title>
+  <meta name="description" content="Panel de gestión de clientes, proyectos y cobros de Pyahu Labs.">
+  <meta name="theme-color" content="#161a12">
+  <link rel="icon" href="brote.svg" type="image/svg+xml">
+  <link rel="preload" href="fuentes/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fuentes/figtree-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+  <!-- Logo "brote" reutilizable: se dibuja solo con stroke-dashoffset -->
+  <svg width="0" height="0" class="sr" aria-hidden="true">
+    <symbol id="brote" viewBox="370 420 340 350">
+      <circle class="b-sol" cx="540" cy="497" r="48"/>
+      <path class="b-trazo b-tallo" pathLength="1" d="M540 540V742"/>
+      <path class="b-trazo b-hoja1" pathLength="1" d="M401 487C415 575 465 625 540 635"/>
+      <path class="b-trazo b-hoja2" pathLength="1" d="M673 443C655 515 610 568 540 580"/>
+    </symbol>
+  </svg>
+
+  <!-- ============ Acceso ============ -->
+  <main id="acceso" class="acceso" hidden>
+    <section class="acceso-escena" aria-hidden="true">
+      <div class="polen" id="polen"></div>
+      <div class="acceso-marca mono">Pyahu Labs · Gestión</div>
+      <svg class="acceso-brote brote-anim"><use href="#brote"/></svg>
+      <div class="acceso-texto">
+        <h1>Tu estudio,<br><em>en orden.</em></h1>
+        <p>Clientes, proyectos y cobros en un solo lugar. Hecho en Paraguay.</p>
+      </div>
+    </section>
+
+    <section class="acceso-panel">
+      <div class="acceso-caja">
+        <div class="pestanas" role="tablist">
+          <button role="tab" class="pestana activa" data-modo="login" aria-selected="true">Ingresar</button>
+          <button role="tab" class="pestana" data-modo="registro" aria-selected="false">Crear cuenta</button>
+          <span class="pestana-marca"></span>
+        </div>
+
+        <form id="form-acceso" novalidate>
+          <h2 id="acceso-titulo">Hola de nuevo</h2>
+          <p class="suave" id="acceso-sub">Ingresá con tu email y contraseña.</p>
+
+          <label class="campo solo-registro" hidden>
+            <span>Nombre</span>
+            <input name="nombre" autocomplete="name" maxlength="100">
+          </label>
+          <label class="campo">
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" required>
+          </label>
+          <label class="campo">
+            <span>Contraseña</span>
+            <input name="password" type="password" autocomplete="current-password" required>
+            <small class="solo-registro suave" hidden>Mínimo 8 caracteres.</small>
+          </label>
+
+          <p class="error-form" role="alert"></p>
+          <button class="btn btn-terracota btn-ancho" type="submit"><span>Ingresar</span></button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ Panel ============ -->
+  <div id="app" class="app" hidden>
+    <aside class="lateral">
+      <a class="lateral-logo" href="#resumen">
+        <svg class="brote-mini brote-anim"><use href="#brote"/></svg>
+        <span>Pyahu <em>Labs</em></span>
+      </a>
+      <nav class="menu" aria-label="Secciones">
+        <span class="menu-marca" aria-hidden="true"></span>
+        <a href="#resumen" data-vista="resumen">
+          <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-4H4zM14 4v4h6V4z"/></svg><span>Resumen</span>
+        </a>
+        <a href="#clientes" data-vista="clientes">
+          <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.3 3.3 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/></svg><span>Clientes</span>
+        </a>
+        <a href="#proyectos" data-vista="proyectos">
+          <svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span>Proyectos</span>
+        </a>
+        <a href="#pagos" data-vista="pagos">
+          <svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg><span>Pagos</span>
+        </a>
+      </nav>
+      <div class="lateral-pie">
+        <div class="usuario">
+          <span class="avatar" id="usuario-avatar"></span>
+          <span class="usuario-email" id="usuario-email"></span>
+        </div>
+        <button class="btn-texto" id="salir" type="button">Salir</button>
+      </div>
+    </aside>
+
+    <main class="contenido" id="contenido">
+      <header class="cabecera">
+        <div>
+          <p class="mono suave" id="vista-fecha"></p>
+          <h1 id="vista-titulo">Resumen</h1>
+        </div>
+        <button class="btn btn-terracota" id="accion-principal" type="button" hidden>
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span></span>
+        </button>
+      </header>
+      <section id="vista" class="vista" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <!-- Formularios y confirmaciones -->
+  <dialog id="modal" class="modal">
+    <form method="dialog" id="modal-form" novalidate>
+      <header class="modal-cabeza">
+        <h2 id="modal-titulo"></h2>
+        <button class="icono" value="cancelar" formnovalidate aria-label="Cerrar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div id="modal-cuerpo" class="modal-cuerpo"></div>
+      <p class="error-form" role="alert"></p>
+      <footer class="modal-pie">
+        <button class="btn btn-linea" value="cancelar" formnovalidate>Cancelar</button>
+        <button class="btn btn-terracota" value="ok" id="modal-ok">Guardar</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="avisos" id="avisos" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

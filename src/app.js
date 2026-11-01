@@ -1,4 +1,5 @@
-require('dotenv').config();
+require('dotenv').config({ quiet: true }); // quiet: sin el aviso de dotenv en consola
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const auth = require('./middleware/auth');
@@ -7,7 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.json({ api: 'Pyahu Labs', estado: 'ok' }));
+// Panel web (HTML, CSS y JS de la carpeta public) en http://localhost:3000/
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+app.get('/estado', (req, res) => res.json({ api: 'Pyahu Labs', estado: 'ok' }));
 app.use('/auth', require('./routes/auth'));
 app.use('/clientes', auth, require('./routes/clientes'));
 app.use('/proyectos', auth, require('./routes/proyectos'));
