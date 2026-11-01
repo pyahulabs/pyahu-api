@@ -41,4 +41,30 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Cobrado mes por mes: GET /resumen/mensual?meses=12 (de 1 a 36).
+// Los meses sin pagos también aparecen, con 0, para que el gráfico no tenga huecos
+router.get('/mensual', async (req, res, next) => {
+  try {
+    const meses = req.query.meses === undefined ? 12 : Number(req.query.meses);
+    if (!Number.isInteger(meses) || meses < 1 || meses > 36)
+      return res.status(400).json({ error: 'meses debe ser un entero entre 1 y 36' });
+
+    const hoy = new Date();
+    const desde = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth() - meses + 1, 1));
+    const [filas] = await db.execute(`
+      SELECT DATE_FORMAT(fecha, '%Y-%m') AS mes, SUM(monto) AS cobrado, COUNT(*) AS pagos
+      FROM pagos WHERE fecha >= ?
+      GROUP BY mes`, [desde.toISOString().slice(0, 10)]);
+
+    const lista = [];
+    for (let i = 0; i < meses; i++) {
+      const d = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth() + i, 1));
+      const mes = d.toISOString().slice(0, 7);
+      const f = filas.find((x) => x.mes === mes);
+      lista.push({ mes, cobrado: f ? f.cobrado : 0, pagos: f ? f.pagos : 0 });
+    }
+    res.json(lista);
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
