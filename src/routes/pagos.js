@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db = require('../db');
-const { validarBody, MONTO_MAX } = require('../middleware/validar');
+const { validarBody, idValido, MONTO_MAX } = require('../middleware/validar');
 
 const METODOS = ['efectivo', 'transferencia', 'otro'];
 
@@ -11,6 +11,12 @@ const PAGO = {
   fecha: { tipo: 'fecha', obligatorio: true },
   nota: { tipo: 'texto', max: 255 },
 };
+
+// Al editar un pago no se cambia de proyecto: para eso se borra y se carga de nuevo
+const { proyecto_id: _sinProyecto, ...PAGO_EDICION } = PAGO;
+PAGO_EDICION.metodo = { ...PAGO.metodo, obligatorio: true };
+
+router.param('id', idValido);
 
 router.get('/', async (req, res, next) => {
   try {
@@ -50,6 +56,41 @@ router.post('/', validarBody(PAGO), async (req, res, next) => {
   } finally {
     conn.release();
   }
+});
+
+// Edita monto, método, fecha o nota. Igual que al crear, el proyecto se
+// bloquea para que la suma de pagos nunca supere su monto total
+router.put('/:id', validarBody(PAGO_EDICION), async (req, res, next) => {
+  const { monto, metodo, fecha, nota } = req.datos;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[pago]] = await conn.execute('SELECT proyecto_id FROM pagos WHERE id = ?', [req.params.id]);
+    if (!pago) { await conn.rollback(); return res.status(404).json({ error: 'Pago no encontrado' }); }
+    const [[p]] = await conn.execute('SELECT monto_total FROM proyectos WHERE id = ? FOR UPDATE', [pago.proyecto_id]);
+    const [[{ otros }]] = await conn.execute(
+      'SELECT COALESCE(SUM(monto),0) AS otros FROM pagos WHERE proyecto_id = ? AND id <> ?', [pago.proyecto_id, req.params.id]);
+    if (otros + monto > p.monto_total) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'El pago supera el saldo del proyecto', saldo: p.monto_total - otros });
+    }
+    await conn.execute('UPDATE pagos SET monto=?, metodo=?, fecha=?, nota=? WHERE id=?', [monto, metodo, fecha, nota, req.params.id]);
+    await conn.commit();
+    res.json({ id: Number(req.params.id), proyecto_id: pago.proyecto_id, monto, metodo, fecha, nota });
+  } catch (e) {
+    await conn.rollback();
+    next(e);
+  } finally {
+    conn.release();
+  }
+});
+
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const [r] = await db.execute('DELETE FROM pagos WHERE id = ?', [req.params.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Pago no encontrado' });
+    res.status(204).end();
+  } catch (e) { next(e); }
 });
 
 module.exports = router;
