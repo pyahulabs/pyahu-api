@@ -12,6 +12,14 @@ const PROYECTO = {
   monto_total: { tipo: 'entero', min: 0, max: MONTO_MAX, porDefecto: 0 },
 };
 
+// El PUT reemplaza el proyecto entero: estado y monto_total no pueden faltar,
+// si no un PUT sin estado lo volvería a "presupuesto" sin querer
+const PROYECTO_EDICION = {
+  ...PROYECTO,
+  estado: { ...PROYECTO.estado, obligatorio: true },
+  monto_total: { ...PROYECTO.monto_total, obligatorio: true },
+};
+
 const CAMBIO_ESTADO = {
   estado: { tipo: 'opcion', opciones: ESTADOS, obligatorio: true },
 };
@@ -43,6 +51,35 @@ router.post('/', validarBody(PROYECTO), async (req, res, next) => {
   } catch (e) {
     if (e.code === 'ER_NO_REFERENCED_ROW_2') return res.status(400).json({ error: 'El cliente no existe' });
     next(e);
+  }
+});
+
+// Edita un proyecto. Con transacción, para que el monto total nunca quede
+// por debajo de lo ya cobrado (POST /pagos bloquea la misma fila)
+router.put('/:id', validarBody(PROYECTO_EDICION), async (req, res, next) => {
+  const { cliente_id, nombre, descripcion, estado, monto_total } = req.datos;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[p]] = await conn.execute('SELECT id FROM proyectos WHERE id = ? FOR UPDATE', [req.params.id]);
+    if (!p) { await conn.rollback(); return res.status(404).json({ error: 'Proyecto no encontrado' }); }
+    const [[{ pagado }]] = await conn.execute(
+      'SELECT COALESCE(SUM(monto),0) AS pagado FROM pagos WHERE proyecto_id = ?', [req.params.id]);
+    if (monto_total < pagado) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'monto_total no puede ser menor a lo ya cobrado', pagado });
+    }
+    await conn.execute(
+      'UPDATE proyectos SET cliente_id=?, nombre=?, descripcion=?, estado=?, monto_total=? WHERE id=?',
+      [cliente_id, nombre, descripcion, estado, monto_total, req.params.id]);
+    await conn.commit();
+    res.json({ id: Number(req.params.id), cliente_id, nombre, descripcion, estado, monto_total, pagado, saldo: monto_total - pagado });
+  } catch (e) {
+    await conn.rollback();
+    if (e.code === 'ER_NO_REFERENCED_ROW_2') return res.status(400).json({ error: 'El cliente no existe' });
+    next(e);
+  } finally {
+    conn.release();
   }
 });
 
