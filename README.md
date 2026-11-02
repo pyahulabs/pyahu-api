@@ -9,12 +9,16 @@ API REST para gestionar los clientes, proyectos y pagos de Pyahu Labs, con un pa
 - **Usuarios:** registro e inicio de sesión. Las contraseñas se guardan con bcrypt y el login devuelve un token JWT que dura 8 horas. El registro está **cerrado**: solo se puede crear el primer usuario (ver [Registro cerrado](#registro-cerrado)).
 - **Clientes:** CRUD completo, con RUC/CI y datos de contacto.
 - **Proyectos:** estado (presupuesto, en curso, entregado, cancelado), fecha de entrega opcional, edición completa y saldo pendiente calculado.
-- **Pagos:** registrar, editar y borrar, con transacción y bloqueo de fila, para no cobrar nunca más que el saldo del proyecto.
-- **Resumen:** total cobrado, total pendiente, lo que queda en presupuestos y lo cobrado mes por mes.
+- **IVA, gastos y neto:** cada proyecto tiene su tasa de IVA (10 %, 5 % o sin IVA, incluida en el monto, como se cotiza en Paraguay) y sus gastos (dominios, hosting, licencias, trabajo tercerizado). La API calcula el neto: lo que le queda al estudio.
+- **Pagos:** registrar, editar y borrar, con transacción y bloqueo de fila, para no cobrar nunca más que el saldo del proyecto. Cada pago marca si ya se le dio factura al cliente, con el número.
+- **Pendientes e historial:** una lista de lo que le falta a cada proyecto, para tildar, y un historial con notas escritas a mano. Los cambios de estado se anotan solos, con el motivo (por ejemplo, por qué se canceló).
+- **Resumen:** total cobrado, total pendiente, lo que queda en presupuestos, el neto de lo cobrado (sin IVA ni gastos), lo cobrado sin factura y lo cobrado mes por mes.
 - **Seguridad:** límite de intentos de login (429 después de 8 fallidos en 15 minutos) y headers de seguridad con helmet.
 - **Validación:** cada campo se revisa antes de llegar a la base (tipos, formatos, largos y fechas reales).
-- **Panel web:** HTML, CSS y JavaScript sin librerías, con la identidad visual de Pyahu Labs y animaciones. Incluye un gráfico de cobros por mes, las próximas entregas, exportar a CSV (se abre en Excel), modo oscuro y se puede instalar como app en el celu.
-- **Tests:** 16 tests automáticos con `npm test`, sobre una base aparte.
+- **Panel web:** HTML, CSS y JavaScript sin librerías, con la identidad visual de Pyahu Labs y animaciones. Cada proyecto tiene su **ficha** con cuentas, pagos, gastos, pendientes e historial, y un botón para pedir el saldo por WhatsApp. Incluye un gráfico de cobros por mes, las próximas entregas, "Para hacer", cuánto debe cada cliente, exportar a CSV (se abre en Excel), modo oscuro y se puede instalar como app en el celu.
+- **Tests:** 18 tests automáticos con `npm test`, sobre una base aparte.
+
+![Ficha de un proyecto: cuentas, pagos con factura, gastos, pendientes e historial](docs/capturas/ficha.jpg)
 
 ## Tecnologías
 
@@ -55,6 +59,7 @@ pyahu-api/
     ├── server.js           # arranca el servidor
     ├── app.js              # middlewares, rutas y manejo de errores
     ├── db.js               # pool de conexiones a MySQL
+    ├── cuentas.js          # IVA incluido y neto de cada proyecto
     ├── middleware/
     │   ├── auth.js         # exige un token válido
     │   ├── limiteIntentos.js  # frena a quien prueba contraseñas
@@ -64,6 +69,9 @@ pyahu-api/
         ├── clientes.js
         ├── proyectos.js
         ├── pagos.js
+        ├── gastos.js
+        ├── tareas.js       # pendientes de cada proyecto
+        ├── notas.js        # historial de cada proyecto
         └── resumen.js
 ```
 
@@ -124,7 +132,19 @@ El panel se usa igual que en la PC. Lo que **no** vas a poder hacer así es inst
 npm test
 ```
 
-Corre 16 tests (validaciones, login, registro cerrado, clientes, proyectos, pagos y resumen) contra una base **aparte**, `pyahu_test`, que se borra y se vuelve a crear en cada corrida. Tus datos de la base `pyahu` no se tocan. Usa el mismo usuario de MySQL del `.env`.
+Corre 18 tests (validaciones, login, registro cerrado, clientes, proyectos, pagos, IVA y gastos, facturas, pendientes, historial y resumen) contra una base **aparte**, `pyahu_test`, que se borra y se vuelve a crear en cada corrida. Tus datos de la base `pyahu` no se tocan. Usa el mismo usuario de MySQL del `.env`.
+
+### IVA y neto
+
+En Paraguay los precios se dan con el IVA **incluido**, así que `monto_total` es lo que paga el cliente. Con IVA 10 %, el IVA es el total dividido 11: de ₲ 1.100.000, ₲ 100.000 son IVA. El neto de un proyecto es:
+
+```
+neto = monto_total − IVA incluido − gastos
+```
+
+Si el proyecto se cancela, ya no se va a cobrar el total, así que el neto se calcula sobre lo que efectivamente se cobró. En el resumen, `neto_cobrado` es lo cobrado menos su IVA y menos todos los gastos: la plata que de verdad le queda al estudio.
+
+> Es una cuenta para tener una idea clara de cuánto ganás. Para la liquidación del IVA ante la DNIT, seguí lo que te indique tu contador.
 
 ## Endpoints
 
@@ -138,17 +158,27 @@ Todas las rutas, salvo `/auth` y `/estado`, requieren el header `Authorization: 
 | POST | `/auth/login` | Devuelve `{ token }`. 429 después de 8 intentos fallidos |
 | GET | `/clientes` | Listar clientes |
 | POST | `/clientes` | Crear (`nombre`; opcionales `email`, `telefono`, `ruc_ci`) |
-| GET, PUT, DELETE | `/clientes/:id` | Ver, editar o borrar. Borrar un cliente borra sus proyectos y pagos |
-| GET | `/proyectos` | Listar, con `cliente`, `pagado` y `saldo` |
-| POST | `/proyectos` | Crear (`cliente_id`, `nombre`; opcionales `descripcion`, `estado`, `monto_total`, `fecha_entrega`) |
-| PUT | `/proyectos/:id` | Editar todo el proyecto (`estado` y `monto_total` obligatorios). El monto total no puede quedar por debajo de lo ya cobrado |
-| PATCH | `/proyectos/:id/estado` | Cambiar solo el estado |
-| DELETE | `/proyectos/:id` | Borrar el proyecto y sus pagos |
+| GET, PUT, DELETE | `/clientes/:id` | Ver, editar o borrar. Borrar un cliente borra sus proyectos y todo lo de ellos |
+| GET | `/proyectos` | Listar, con `cliente`, `cliente_telefono`, `pagado`, `saldo`, `iva`, `gastos`, `neto`, `sin_facturar`, `tareas` y `tareas_hechas` |
+| POST | `/proyectos` | Crear (`cliente_id`, `nombre`; opcionales `descripcion`, `estado`, `monto_total`, `tasa_iva` 10/5/0, `fecha_entrega`) |
+| PUT | `/proyectos/:id` | Editar todo el proyecto (`estado`, `monto_total` y `tasa_iva` obligatorios). El monto total no puede quedar por debajo de lo ya cobrado. Si cambia el estado, queda en el historial |
+| PATCH | `/proyectos/:id/estado` | Cambiar solo el estado (`estado`; opcional `nota` con el motivo, que queda en el historial) |
+| DELETE | `/proyectos/:id` | Borrar el proyecto con sus pagos, gastos, pendientes e historial |
 | GET | `/pagos` | Listar (filtro opcional `?proyecto_id=`) |
-| POST | `/pagos` | Registrar (`proyecto_id`, `monto`, `fecha` AAAA-MM-DD; opcionales `metodo`, `nota`) |
-| PUT | `/pagos/:id` | Editar (`monto`, `fecha`, `metodo`; opcional `nota`). El proyecto no cambia y el total cobrado no puede pasar el monto del proyecto |
+| POST | `/pagos` | Registrar (`proyecto_id`, `monto`, `fecha` AAAA-MM-DD; opcionales `metodo`, `nota`, `facturado` true/false, `factura_numero`) |
+| PUT | `/pagos/:id` | Editar (`monto`, `fecha`, `metodo`, `facturado`; opcionales `nota`, `factura_numero`). El proyecto no cambia y el total cobrado no puede pasar el monto del proyecto |
+| PATCH | `/pagos/:id/factura` | Marcar o desmarcar la factura (`facturado`; opcional `factura_numero`) |
 | DELETE | `/pagos/:id` | Borrar un pago: el saldo del proyecto vuelve a subir |
-| GET | `/resumen` | Totales cobrado, pendiente y presupuestado, y detalle por estado |
+| GET | `/gastos` | Listar (filtro opcional `?proyecto_id=`) |
+| POST | `/gastos` | Cargar (`proyecto_id`, `concepto`, `monto`, `fecha`; opcional `categoria`: dominio, hosting, software, tercerizado u otro) |
+| PUT, DELETE | `/gastos/:id` | Editar (`concepto`, `categoria`, `monto`, `fecha`) o borrar |
+| GET | `/tareas` | Pendientes (filtro opcional `?proyecto_id=`) |
+| POST | `/tareas` | Agregar un pendiente (`proyecto_id`, `texto`) |
+| PUT, DELETE | `/tareas/:id` | Editar o tildar (`texto`, `hecha` true/false) o borrar |
+| GET | `/notas` | Historial, lo más nuevo primero (filtro opcional `?proyecto_id=`). `tipo` es `nota` o `estado` y `creada_en` viene en hora UTC (ISO) |
+| POST | `/notas` | Escribir una nota (`proyecto_id`, `texto` de hasta 2000 caracteres) |
+| PUT, DELETE | `/notas/:id` | Editar el texto o borrar |
+| GET | `/resumen` | Totales cobrado, pendiente y presupuestado, IVA de lo cobrado, gastos, neto, lo cobrado sin factura y detalle por estado |
 | GET | `/resumen/mensual` | Cobrado por mes (`?meses=` de 1 a 36, 12 por defecto). Los meses sin pagos vienen con 0 |
 
 ### Respuestas de error
@@ -193,7 +223,7 @@ En [docs/PUBLICAR.md](docs/PUBLICAR.md) hay una guía paso a paso para subirla g
 
 ## Más capturas
 
-| Proyectos | Pagos | Registrar un pago |
+| Proyectos | Pagos | Registrar un pago con factura |
 |---|---|---|
 | ![Proyectos](docs/capturas/proyectos.jpg) | ![Pagos](docs/capturas/pagos.jpg) | ![Registrar pago](docs/capturas/modal-pago.jpg) |
 
@@ -201,9 +231,9 @@ En [docs/PUBLICAR.md](docs/PUBLICAR.md) hay una guía paso a paso para subirla g
 |---|---|---|
 | ![Modo oscuro](docs/capturas/oscuro.jpg) | ![Clientes](docs/capturas/clientes.jpg) | ![Acceso](docs/capturas/acceso.jpg) |
 
-| Celular | Celular, modo oscuro |
-|---|---|
-| ![Celular](docs/capturas/movil.jpg) | ![Celular en modo oscuro](docs/capturas/movil-oscuro.jpg) |
+| Celular | Ficha en el celular | Celular, modo oscuro |
+|---|---|---|
+| ![Celular](docs/capturas/movil.jpg) | ![Ficha en el celular](docs/capturas/movil-ficha.jpg) | ![Celular en modo oscuro](docs/capturas/movil-oscuro.jpg) |
 
 Las capturas se sacan con [Playwright](https://playwright.dev/) manejando Chrome, con los datos de `npm run demo`.
 

@@ -58,7 +58,7 @@ $env:DB_SSL_CA = (Get-Content ca.pem) -join '\n'
 npm run migrar
 ```
 
-Tiene que decir `Aplicada: 001_fecha_entrega.sql`. **Cerrá esa ventana de PowerShell** al terminar: así esas variables se olvidan y tu PC vuelve a usar el MySQL local.
+Tiene que decir `Aplicada:` con cada archivo de la carpeta `migraciones/` (`001_fecha_entrega.sql`, `002_iva_y_gastos.sql` y `003_facturas_pendientes_y_notas.sql`). **Cerrá esa ventana de PowerShell** al terminar: así esas variables se olvidan y tu PC vuelve a usar el MySQL local.
 
 ## 4. Preparar el certificado en una línea
 
