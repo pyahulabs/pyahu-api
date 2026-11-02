@@ -35,6 +35,9 @@ app.use('/auth', require('./routes/auth'));
 app.use('/clientes', auth, require('./routes/clientes'));
 app.use('/proyectos', auth, require('./routes/proyectos'));
 app.use('/pagos', auth, require('./routes/pagos'));
+app.use('/gastos', auth, require('./routes/gastos'));
+app.use('/tareas', auth, require('./routes/tareas'));
+app.use('/notas', auth, require('./routes/notas'));
 app.use('/resumen', auth, require('./routes/resumen'));
 
 // Manejo centralizado de errores

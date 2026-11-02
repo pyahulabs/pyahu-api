@@ -48,16 +48,26 @@ Pedir GET "/clientes/$($cliente.id)" $null $token | Out-Null
 Write-Host ''
 Write-Host '== Proyectos ==' -ForegroundColor Cyan
 $proyecto = Pedir POST '/proyectos' @{ cliente_id = $cliente.id; nombre = 'Sitio web con menú'; estado = 'en_curso'; monto_total = 3500000 } $token
-Pedir PUT "/proyectos/$($proyecto.id)" @{ cliente_id = $cliente.id; nombre = 'Sitio web con menú y reservas'; estado = 'en_curso'; monto_total = 4200000 } $token | Out-Null
+Pedir PUT "/proyectos/$($proyecto.id)" @{ cliente_id = $cliente.id; nombre = 'Sitio web con menú y reservas'; estado = 'en_curso'; monto_total = 4200000; tasa_iva = 10 } $token | Out-Null
 
 Write-Host ''
 Write-Host '== Pagos ==' -ForegroundColor Cyan
-Pedir POST '/pagos' @{ proyecto_id = $proyecto.id; monto = 1500000; metodo = 'transferencia'; fecha = '2026-11-01'; nota = 'Seña 40%' } $token | Out-Null
+$pago = Pedir POST '/pagos' @{ proyecto_id = $proyecto.id; monto = 1500000; metodo = 'transferencia'; fecha = '2026-11-01'; nota = 'Seña 40%' } $token
+Pedir PATCH "/pagos/$($pago.id)/factura" @{ facturado = $true; factura_numero = '001-001-0000123' } $token | Out-Null
 Pedir POST '/pagos' @{ proyecto_id = $proyecto.id; monto = 9000000; fecha = '2026-11-02' } $token | Out-Null    # 400: supera el saldo
-Pedir PUT "/proyectos/$($proyecto.id)" @{ cliente_id = $cliente.id; nombre = 'Sitio'; estado = 'en_curso'; monto_total = 1000 } $token | Out-Null  # 400: menos de lo cobrado
+Pedir PUT "/proyectos/$($proyecto.id)" @{ cliente_id = $cliente.id; nombre = 'Sitio'; estado = 'en_curso'; monto_total = 1000; tasa_iva = 10 } $token | Out-Null  # 400: menos de lo cobrado
 Pedir GET "/pagos?proyecto_id=$($proyecto.id)" $null $token | Out-Null
 Pedir GET '/proyectos' $null $token | Out-Null
 Pedir PATCH "/proyectos/$($proyecto.id)/estado" @{ estado = 'entregado' } $token | Out-Null
+
+Write-Host ''
+Write-Host '== Gastos, pendientes e historial ==' -ForegroundColor Cyan
+Pedir POST '/gastos' @{ proyecto_id = $proyecto.id; concepto = 'Dominio .com.py por 1 año'; categoria = 'dominio'; monto = 250000; fecha = '2026-11-01' } $token | Out-Null
+Pedir POST '/gastos' @{ proyecto_id = $proyecto.id; concepto = 'Viaje'; categoria = 'viajes'; monto = 1; fecha = '2026-11-01' } $token | Out-Null   # 400: categoría que no existe
+$tarea = Pedir POST '/tareas' @{ proyecto_id = $proyecto.id; texto = 'Pedir las fotos del menú' } $token
+Pedir PUT "/tareas/$($tarea.id)" @{ texto = 'Pedir las fotos del menú'; hecha = $true } $token | Out-Null
+Pedir POST '/notas' @{ proyecto_id = $proyecto.id; texto = 'Quiere sumar reservas por WhatsApp en una segunda etapa' } $token | Out-Null
+Pedir GET "/notas?proyecto_id=$($proyecto.id)" $null $token | Out-Null   # incluye el cambio a "entregado"
 
 Write-Host ''
 Write-Host '== Resumen ==' -ForegroundColor Cyan
