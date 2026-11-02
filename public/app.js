@@ -845,8 +845,14 @@ const BOTON_CSV = (que) => `<button class="btn btn-linea btn-chico" data-accion=
 // ---------- Modal ----------
 let alEnviarModal = null;
 
-// cancelar: el texto del botón que cierra sin guardar
-function abrirModal({ titulo, cuerpo, ok = 'Guardar', cancelar = 'Cancelar', peligro = false, alEnviar, alAbrir }) {
+// En celulares y tablets no se enfoca ningún campo al abrir un formulario: si no,
+// aparece el teclado de entrada, tapa medio formulario y no se puede deslizar
+const tactil = matchMedia('(hover: none), (pointer: coarse)').matches;
+
+// cancelar: el texto del botón que cierra sin guardar.
+// enfocar: false en los formularios de editar, que se abren para ver qué se puede
+// cambiar (en la compu, los de "nuevo" sí arrancan en el primer campo)
+function abrirModal({ titulo, cuerpo, ok = 'Guardar', cancelar = 'Cancelar', peligro = false, enfocar = true, alEnviar, alAbrir }) {
   const modal = $('#modal');
   $('#modal-titulo').innerHTML = titulo;
   $('#modal-cuerpo').innerHTML = cuerpo;
@@ -858,9 +864,12 @@ function abrirModal({ titulo, cuerpo, ok = 'Guardar', cancelar = 'Cancelar', pel
   alEnviarModal = alEnviar;
   modal.classList.remove('cerrando');
   modal.showModal();
+  modal.scrollTop = 0;
   if (alAbrir) alAbrir(modal);
   const primero = $('#modal-cuerpo input, #modal-cuerpo select');
-  if (primero) primero.focus();
+  // Sin campo enfocado, el foco va al título: los lectores de pantalla lo leen y no sale el teclado
+  if (primero && enfocar && !tactil) primero.focus();
+  else $('#modal-titulo').focus({ preventScroll: true });
 }
 
 function cerrarModal() {
@@ -905,6 +914,7 @@ const campo = (etiqueta, html, extra = '') => `<label class="campo"><span>${etiq
 function formCliente(c = {}) {
   abrirModal({
     titulo: c.id ? 'Editar <em>cliente</em>' : 'Nuevo <em>cliente</em>',
+    enfocar: !c.id,
     cuerpo: campo('Nombre', `<input name="nombre" required maxlength="150" value="${esc(c.nombre)}">`)
       + campo('Email', `<input name="email" type="email" maxlength="150" value="${esc(c.email)}">`)
       + `<div class="campos-2">${campo('Teléfono', `<input name="telefono" inputmode="tel" placeholder="+595 981 123456" value="${esc(c.telefono)}">`)}
@@ -926,6 +936,7 @@ function formProyecto(p = {}) {
   const opcionesIva = TASAS_IVA.map(([t, nombre]) => `<option value="${t}" ${t === (p.tasa_iva ?? 10) ? 'selected' : ''}>${nombre}</option>`).join('');
   abrirModal({
     titulo: p.id ? 'Editar <em>proyecto</em>' : 'Nuevo <em>proyecto</em>',
+    enfocar: !p.id,
     cuerpo: campo('Cliente', `<select name="cliente_id" required>${p.id ? '' : '<option value="">Elegí un cliente</option>'}${opcionesCli}</select>`)
       + campo('Nombre del proyecto', `<input name="nombre" required maxlength="150" value="${esc(p.nombre)}" placeholder="Sitio web, identidad, tienda…">`)
       + campo('Descripción', `<textarea name="descripcion" maxlength="2000">${esc(p.descripcion)}</textarea>`)
@@ -1008,6 +1019,7 @@ function formEditarPago(pago) {
   const metodos = Object.entries(METODOS).map(([k, n]) => `<option value="${k}" ${k === pago.metodo ? 'selected' : ''}>${n}</option>`).join('');
   abrirModal({
     titulo: 'Editar <em>pago</em>',
+    enfocar: false,
     cuerpo: `<p class="aviso-saldo">${esc(proyecto.nombre)} · ${esc(proyecto.cliente)} · hasta <b>${gs(maximo)}</b></p>`
       + `<div class="campos-2">${campo('Monto (₲)', `<input name="monto" type="number" min="1" max="${maximo}" step="1" inputmode="numeric" required value="${pago.monto}">`)}
          ${campo('Fecha', `<input name="fecha" type="date" required value="${esc(pago.fecha)}">`)}</div>`
@@ -1068,6 +1080,7 @@ function formGasto(proyectoId, g = {}) {
   const p = estado.datos.proyectos.find((x) => x.id === proyectoId);
   abrirModal({
     titulo: g.id ? 'Editar <em>gasto</em>' : 'Nuevo <em>gasto</em>',
+    enfocar: !g.id,
     cuerpo: `<p class="aviso-saldo">${esc(p.nombre)} · ${esc(p.cliente)}</p>`
       + campo('Concepto', `<input name="concepto" maxlength="150" required placeholder="Dominio .com.py por 1 año" value="${esc(g.concepto)}">`)
       + `<div class="campos-2">${campo('Categoría', `<select name="categoria">${categorias}</select>`)}
@@ -1109,6 +1122,7 @@ async function borrarEnLinea(boton, ruta, aviso) {
 function formCancelar(p) {
   abrirModal({
     titulo: `¿Cancelar <em>${esc(p.nombre)}</em>?`,
+    enfocar: false,
     cuerpo: `<p class="aviso-saldo">${p.pagado ? `Ya se cobraron ${gs(p.pagado)}: esos pagos quedan registrados.` : 'No tiene pagos registrados.'}</p>`
       + campo('¿Qué pasó? <span class="opcional">(opcional, queda en el historial)</span>',
         '<textarea name="nota" maxlength="2000" placeholder="El cliente frenó el proyecto por presupuesto, queda la seña…"></textarea>'),

@@ -106,11 +106,14 @@
           <span class="avatar" id="usuario-avatar"></span>
           <span class="usuario-email" id="usuario-email"></span>
         </div>
+        <!-- En la compu va acá; en el celu el CSS lo saca a un botón flotante arriba de la barra -->
         <button class="icono boton-tema" data-accion="tema" type="button" aria-label="Cambiar tema">
           <svg class="sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
           <svg class="luna" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
         </button>
-        <button class="btn-texto" id="salir" type="button">Salir</button>
+        <button class="salir" id="salir" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9"/></svg><span>Salir</span>
+        </button>
       </div>
     </aside>
 
@@ -132,7 +135,7 @@
   <dialog id="modal" class="modal">
     <form method="dialog" id="modal-form" novalidate>
       <header class="modal-cabeza">
-        <h2 id="modal-titulo"></h2>
+        <h2 id="modal-titulo" tabindex="-1"></h2>
         <button class="icono" value="cancelar" formnovalidate aria-label="Cerrar">
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
