@@ -1,6 +1,6 @@
 # Lanzamiento del panel de gestión en Instagram
 
-Material para anunciar el panel: un prompt para armar las piezas en **Claude Design**, el texto del posteo y la historia. Las capturas de esta carpeta son del panel real (con los datos de ejemplo de `npm run demo`).
+Material para anunciar el panel: un prompt para armar las piezas en **Claude Design** con el estilo de tu último post, el texto del posteo y la historia. Las capturas de esta carpeta son del panel real (con los datos de ejemplo de `npm run demo`).
 
 | Archivo | Qué es |
 |---|---|
@@ -12,36 +12,29 @@ Material para anunciar el panel: un prompt para armar las piezas en **Claude Des
 
 ## 1. Prompt para Claude Design
 
-Adjuntá las cinco capturas y pegá esto:
+Adjuntá una captura de tu **último post** (el estilo sale de ahí), las cinco capturas del panel, y pegá esto:
 
 ```
-Diseñá un carrusel de Instagram de 6 placas (1080 × 1350, formato 4:5) y una historia (1080 × 1920) para anunciar un producto nuevo de Pyahu Labs, un estudio web de Villarrica, Paraguay: el Panel de gestión.
+Diseñá un carrusel de Instagram de 6 placas (1080 × 1350) y una historia (1080 × 1920) para anunciar un producto nuevo de Pyahu Labs, un estudio web de Villarrica, Paraguay: el Panel de gestión.
 
-Qué es: un panel web para quien cobra por trabajo o por proyecto (estudios, freelancers, profesionales). Lleva clientes, proyectos, cobros con factura, IVA, gastos (dominios, hosting, licencias), pendientes y el historial de cada proyecto, y te dice cuánto te queda neto. Anda en la compu y en el celu, con modo oscuro. Se prueba gratis en pyahulabs.com/gestion.
+Que se parezca al último post de Pyahu Labs, que te adjunto: mismo estilo.
 
-Identidad visual (respetala exacta):
-- Colores: papel #F3EFE1 (fondo), papel oscuro #EAE4D1, tinta #23281C (texto), noche #161A12 (fondos oscuros), terracota #C1502E (acento y botones), dorado #E7A64B, verde #3E6259.
-- Tipografías: Instrument Serif para los títulos grandes, con una palabra en itálica y en terracota; Figtree para los textos; JetBrains Mono en mayúsculas y con espaciado para las etiquetas chicas.
-- Textura de papel suave en los fondos claros. Esquinas redondeadas, sombras suaves, mucho aire. Sin degradados violetas, íconos 3D ni emojis.
-- Logo: un brote (tallo y dos hojas terracota, con un sol dorado arriba) junto a "Pyahu Labs".
-- "Pyahu" en guaraní significa "nuevo": usalo en la etiqueta "NUEVO · LO MÁS PYAHU".
+Qué es: un panel web para quien cobra por trabajo o por proyecto (estudios, freelancers, profesionales). Lleva clientes, proyectos, cobros con factura, IVA, gastos (dominios, hosting, licencias), pendientes y el historial de cada proyecto, y te dice cuánto te queda neto. Anda en la compu y en el celu. Se prueba gratis en pyahulabs.com/gestion.
 
-Usá las capturas adjuntas tal cual, dentro de una compu o un celular simples y oscuros. Son del panel real: no inventes pantallas ni números.
+Usá las capturas del panel tal cual: son del panel real, no inventes pantallas ni números.
 
 Placas:
-1. Portada. Etiqueta "NUEVO · LO MÁS PYAHU". Título: "¿Cuánto te queda *de verdad* de lo que cobrás?". Un celular con la captura 3 (ficha del proyecto), un poco inclinado.
-2. El problema. Fondo noche. Título: "Cobrás. Pagás el dominio, el hosting, el IVA…" y debajo, más chico: "…y a fin de mes no sabés cuánto ganaste." Sin captura: un cuaderno y una planilla dibujados a línea, en dorado.
-3. Cada proyecto, su ficha. La captura 2 en una compu. Texto: "Monto, IVA incluido, gastos y *neto*, en una sola mirada."
-4. Que no se te escape nada. La captura 4 en un celular. Tres líneas cortas con un punto de color cada una: "Qué cobros falta facturar" · "Lo que le falta a cada proyecto" · "Todo lo que pasó, con fecha".
-5. En todos lados. La captura 5 (modo oscuro) en un celular adelante y la captura 1 en una compu atrás. Texto: "En la compu y en el celu. Con modo oscuro." y una etiqueta: "Pedí el saldo por WhatsApp con un toque".
-6. Cierre. Fondo terracota, texto en papel. Título: "Probalo *gratis*" y debajo, bien grande, "pyahulabs.com/gestion". Abajo: "¿Querés uno para tu negocio? Escribime." y "@pyahulabs".
+1. Portada: "Nuevo · lo más pyahu" (pyahu significa "nuevo" en guaraní) y el título "¿Cuánto te queda de verdad de lo que cobrás?", con la captura 3 (la ficha de un proyecto en el celu).
+2. El problema: "Cobrás. Pagás el dominio, el hosting, el IVA…" y "…y a fin de mes no sabés cuánto ganaste." Sin captura.
+3. Cada proyecto, su ficha: la captura 2 (la ficha en la compu) y "Monto, IVA incluido, gastos y neto, en una sola mirada."
+4. Que no se te escape nada: la captura 4 (el historial en el celu) y tres líneas: "Qué cobros falta facturar", "Lo que le falta a cada proyecto" y "Todo lo que pasó, con fecha".
+5. En todos lados: la captura 5 (el celu en modo oscuro) y la captura 1 (la compu), con "En la compu y en el celu" y "Pedí el saldo por WhatsApp con un toque".
+6. Cierre: "Probalo gratis", "pyahulabs.com/gestion", "¿Querés uno para tu negocio? Escribime." y "@pyahulabs".
 
-Historia (1080 × 1920): fondo papel, etiqueta "NUEVO · LO MÁS PYAHU", título "Panel de *gestión*", un celular grande con la captura 3 y, arriba de la franja de abajo, "Probalo: tocá el link". Dejá libres los últimos 350 px de abajo para el sticker de link que agrego en Instagram.
+Historia: "Nuevo · lo más pyahu", "Panel de gestión", la captura 3 y "Probalo: tocá el link". Dejá libre la parte de abajo para el sticker de link de Instagram.
 
-Todos los textos en español de Paraguay, con voseo ("cobrás", "probalo", "escribime"). Que se lean bien en el celu: títulos de 72 px o más y ningún texto de menos de 28 px.
+Todos los textos en español de Paraguay, con voseo.
 ```
-
-Las palabras entre asteriscos (`*de verdad*`) son las que van en itálica y terracota.
 
 ## 2. Texto del posteo
 
@@ -75,7 +68,7 @@ Instagram lo pide en **Configuración avanzada → Escribir texto alternativo**.
 
 ## 4. Cómo publicarlo
 
-1. En Claude Design, adjuntá las cinco capturas, pegá el prompt y revisá cada placa: que los números y las pantallas sean los de las capturas.
+1. En Claude Design, adjuntá una captura de tu último post y las cinco capturas del panel, pegá el prompt y revisá cada placa: que los números y las pantallas sean los de las capturas.
 2. Descargá las 6 placas (PNG o JPG) y la historia.
 3. **Posteo:** carrusel con las 6 placas en orden, el texto de arriba y el texto alternativo de cada una.
 4. **Bio:** poné `pyahulabs.com/gestion` como link mientras dure el lanzamiento.
