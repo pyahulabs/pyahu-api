@@ -217,6 +217,10 @@ Invoke-RestMethod -Uri "$api/resumen" -Headers $auth
 
 > En PowerShell 5.1, `curl` es un alias de `Invoke-WebRequest`. Para usar el curl de verdad, escribí `curl.exe`.
 
+## Demo sin servidor
+
+`npm run armar-demo -- ../pyahu-labs/gestion` arma una copia del panel que funciona sin servidor ni base de datos: `demo/demo-api.js` atiende los mismos pedidos que la API, con datos de ejemplo guardados en el navegador. Es la que se publica en [pyahulabs.com/gestion](https://pyahulabs.com/gestion/) como proyecto de muestra.
+
 ## Publicarla en internet
 
 En [docs/PUBLICAR.md](docs/PUBLICAR.md) hay una guía paso a paso para subirla gratis a **Render** (la API y el panel) con la base en **Aiven** (MySQL).
