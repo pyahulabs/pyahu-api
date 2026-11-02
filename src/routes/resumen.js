@@ -1,41 +1,65 @@
 const router = require('express').Router();
 const db = require('../db');
+const { ivaIncluido } = require('../cuentas');
 
 // Resumen de la plata del estudio.
 // - total_cobrado: todos los pagos registrados.
 // - total_pendiente: lo que falta cobrar de proyectos en curso o entregados.
 // - total_presupuestado: lo que falta de presupuestos que el cliente todavía no aceptó.
-// Los proyectos cancelados no suman a lo pendiente (lo que se cobró de ellos sí cuenta).
+// - iva_cobrado: el IVA que viene incluido en lo cobrado (no es plata del estudio).
+// - total_gastos: todo lo gastado en los proyectos (dominios, hosting…).
+// - neto_cobrado: lo que le queda al estudio de lo cobrado = cobrado − IVA − gastos.
+// - neto_proyectado: el neto de los proyectos en curso y entregados si se cobran completos.
+// - sin_facturar: lo cobrado en pagos que todavía no tienen factura.
+// Los proyectos cancelados no suman a lo pendiente (lo que se cobró y se gastó en ellos sí cuenta).
 router.get('/', async (req, res, next) => {
   try {
-    // Se suman los pagos en una subconsulta: si se hiciera JOIN directo con
-    // pagos, un proyecto con 3 pagos contaría su monto_total 3 veces
-    const [filas] = await db.execute(`
-      SELECT p.estado,
-             COUNT(*) AS proyectos,
-             SUM(p.monto_total) AS monto_total,
-             SUM(COALESCE(g.cobrado, 0)) AS cobrado
+    // Una fila por proyecto, con pagos y gastos sumados en subconsultas: si se
+    // hiciera JOIN directo con pagos, un proyecto con 3 pagos contaría su
+    // monto_total 3 veces
+    const [proyectos] = await db.execute(`
+      SELECT p.estado, p.monto_total, p.tasa_iva,
+             COALESCE(pg.cobrado, 0) AS cobrado,
+             COALESCE(pg.sin_facturar, 0) AS sin_facturar,
+             COALESCE(gs.gastos, 0) AS gastos
       FROM proyectos p
-      LEFT JOIN (SELECT proyecto_id, SUM(monto) AS cobrado FROM pagos GROUP BY proyecto_id) g
-             ON g.proyecto_id = p.id
-      GROUP BY p.estado`);
+      LEFT JOIN (SELECT proyecto_id, SUM(monto) AS cobrado,
+                        SUM(CASE WHEN facturado THEN 0 ELSE monto END) AS sin_facturar
+                 FROM pagos GROUP BY proyecto_id) pg ON pg.proyecto_id = p.id
+      LEFT JOIN (SELECT proyecto_id, SUM(monto) AS gastos FROM gastos GROUP BY proyecto_id) gs ON gs.proyecto_id = p.id`);
 
     const por_estado = {};
     for (const estado of ['presupuesto', 'en_curso', 'entregado', 'cancelado']) {
-      const f = filas.find((x) => x.estado === estado) || { proyectos: 0, monto_total: 0, cobrado: 0 };
+      const lista = proyectos.filter((p) => p.estado === estado);
+      const suma = (campo) => lista.reduce((t, p) => t + p[campo], 0);
+      const monto_total = suma('monto_total');
+      const cobrado = suma('cobrado');
       por_estado[estado] = {
-        proyectos: f.proyectos,
-        monto_total: f.monto_total,
-        cobrado: f.cobrado,
-        pendiente: estado === 'cancelado' ? 0 : f.monto_total - f.cobrado,
+        proyectos: lista.length,
+        monto_total,
+        cobrado,
+        pendiente: estado === 'cancelado' ? 0 : monto_total - cobrado,
+        gastos: suma('gastos'),
       };
     }
 
     const suma = (campo, estados) => estados.reduce((t, e) => t + por_estado[e][campo], 0);
+    const total_cobrado = suma('cobrado', Object.keys(por_estado));
+    const iva_cobrado = proyectos.reduce((t, p) => t + ivaIncluido(p.cobrado, p.tasa_iva), 0);
+    const total_gastos = suma('gastos', Object.keys(por_estado));
+    const neto_proyectado = proyectos
+      .filter((p) => p.estado === 'en_curso' || p.estado === 'entregado')
+      .reduce((t, p) => t + p.monto_total - ivaIncluido(p.monto_total, p.tasa_iva) - p.gastos, 0);
+
     res.json({
-      total_cobrado: suma('cobrado', Object.keys(por_estado)),
+      total_cobrado,
       total_pendiente: suma('pendiente', ['en_curso', 'entregado']),
       total_presupuestado: por_estado.presupuesto.pendiente,
+      iva_cobrado,
+      total_gastos,
+      neto_cobrado: total_cobrado - iva_cobrado - total_gastos,
+      neto_proyectado,
+      sin_facturar: proyectos.reduce((t, p) => t + p.sin_facturar, 0),
       por_estado,
     });
   } catch (e) { next(e); }

@@ -1,0 +1,35 @@
+# Configuración para Render (https://render.com) como "Blueprint".
+# Render lee este archivo y crea el servicio solo; los datos de la base
+# (sync: false) te los pide en pantalla. Guía completa: docs/PUBLICAR.md
+services:
+  - type: web
+    name: pyahu-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /estado
+    envVars:
+      # Render inventa un secreto largo y al azar: no hace falta escribirlo
+      - key: JWT_SECRET
+        generateValue: true
+      # La app corre detrás del proxy de Render: así el límite de intentos ve la IP real
+      - key: TRUST_PROXY
+        value: "1"
+      - key: REGISTRO_ABIERTO
+        value: "false"
+      - key: DB_SSL
+        value: "true"
+      - key: DB_NAME
+        value: pyahu
+      # Estos los copiás de Aiven
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSL_CA
+        sync: false

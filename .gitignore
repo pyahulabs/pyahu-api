@@ -12,3 +12,6 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .claude/
+
+# Certificados de la base en la nube (Aiven): se pegan en las variables, no se suben
+*.pem

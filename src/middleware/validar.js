@@ -31,6 +31,9 @@ function revisar(valor, regla) {
       if (isNaN(d) || d.toISOString().slice(0, 10) !== valor) return 'no es una fecha real';
       return null;
     }
+    case 'booleano':
+      if (typeof valor !== 'boolean') return 'debe ser true o false (sin comillas)';
+      return null;
     case 'opcion':
       if (!regla.opciones.includes(valor)) return `debe ser: ${regla.opciones.join(', ')}`;
       return null;

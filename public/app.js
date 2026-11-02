@@ -13,21 +13,36 @@ const ESTADOS = {
   cancelado: { nombre: 'Cancelado', color: 'var(--tinta-suave)' },
 };
 const METODOS = { transferencia: 'Transferencia', efectivo: 'Efectivo', otro: 'Otro' };
+const CATEGORIAS = {
+  dominio: { nombre: 'Dominio', color: 'var(--azul)' },
+  hosting: { nombre: 'Hosting', color: 'var(--verde)' },
+  software: { nombre: 'Software y licencias', color: 'var(--dorado)' },
+  tercerizado: { nombre: 'Trabajo tercerizado', color: 'var(--terracota)' },
+  otro: { nombre: 'Otro', color: 'var(--tinta-suave)' },
+};
+// En Paraguay los precios se dan con IVA incluido: 10 % para servicios
+const TASAS_IVA = [[10, 'IVA 10 % incluido'], [5, 'IVA 5 % incluido'], [0, 'Sin IVA']];
+const ivaIncluido = (monto, tasa) => Math.round((monto * tasa) / (100 + tasa));
 const VISTAS = {
   resumen: { titulo: 'Cómo <em>vamos</em>', accion: null },
   clientes: { titulo: 'Tus <em>clientes</em>', accion: 'Nuevo cliente' },
   proyectos: { titulo: 'Los <em>proyectos</em>', accion: 'Nuevo proyecto' },
   pagos: { titulo: 'Lo <em>cobrado</em>', accion: 'Registrar pago' },
+  // La ficha de un proyecto (#proyecto-12): el título es el nombre del proyecto
+  proyecto: { titulo: '', accion: 'Registrar pago' },
 };
 const COLORES = ['#C1502E', '#3E6259', '#2E6E8E', '#B9832F', '#7A4E6E', '#5B7A3A'];
 
 const estado = {
   token: guardado('token'),
   vista: 'resumen',
-  datos: { clientes: [], proyectos: [], pagos: [], resumen: null },
+  proyectoId: null, // el de la ficha abierta
+  datos: { clientes: [], proyectos: [], pagos: [], gastos: [], tareas: [], notas: [], resumen: null },
   buscar: '',
   filtroProyectos: 'todos',
   filtroPagos: '',
+  soloSinFactura: false,
+  enfocar: null, // selector a enfocar después de redibujar (para cargar pendientes seguidos)
 };
 
 // ---------- Utilidades ----------
@@ -56,6 +71,15 @@ const ICONOS = {
   ruc: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.5 1.7-2 3-2s2.4.5 3 2M15 10h3M15 14h3"/></svg>',
   buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
   tilde: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  flecha: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+  whatsapp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 18.8z"/><path d="M9 9.5c.3 2 2.2 4.2 4.6 4.9l1.3-1.2 1.8.8-.4 1.6c-3.4.4-7.4-3.3-7.3-6.9l1.6-.4.8 1.8z"/></svg>',
+  nota: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4M8 12h8M8 16h5"/></svg>',
+  estado: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  pago: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg>',
+  gasto: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>',
+  creado: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg>',
+  mas: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  cerrar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 };
 
 // ---------- API ----------
@@ -183,20 +207,28 @@ function entrar() {
   const av = $('#usuario-avatar');
   av.textContent = iniciales(usuario.nombre || usuario.email);
   av.style.setProperty('--c', colorDe(usuario.email));
-  $('#vista-fecha').textContent = new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' });
   estado.vista = vistaDelHash();
   $('#vista').innerHTML = '<div class="grilla kpis">' + '<div class="esqueleto"></div>'.repeat(3) + '</div>';
   pintarMenu();
   cargarTodo(true);
 }
 
-const vistaDelHash = () => (VISTAS[location.hash.slice(1)] ? location.hash.slice(1) : 'resumen');
+function vistaDelHash() {
+  const hash = location.hash.slice(1);
+  const ficha = /^proyecto-(\d+)$/.exec(hash);
+  if (ficha) { estado.proyectoId = Number(ficha[1]); return 'proyecto'; }
+  return VISTAS[hash] && hash !== 'proyecto' ? hash : 'resumen';
+}
+
+const proyectoActual = () => estado.datos.proyectos.find((p) => p.id === estado.proyectoId);
+// Se le puede registrar un pago si no está cancelado y le falta cobrar
+const abierto = (p) => p && p.estado !== 'cancelado' && p.saldo > 0;
 
 async function cargarTodo(animar = false) {
   try {
-    const [clientes, proyectos, pagos, resumen, mensual] = await Promise.all(
-      ['/clientes', '/proyectos', '/pagos', '/resumen', '/resumen/mensual?meses=12'].map((r) => api(r)));
-    estado.datos = { clientes, proyectos, pagos, resumen, mensual };
+    const [clientes, proyectos, pagos, gastos, tareas, notas, resumen, mensual] = await Promise.all(
+      ['/clientes', '/proyectos', '/pagos', '/gastos', '/tareas', '/notas', '/resumen', '/resumen/mensual?meses=12'].map((r) => api(r)));
+    estado.datos = { clientes, proyectos, pagos, gastos, tareas, notas, resumen, mensual };
     pintar(animar);
   } catch (err) {
     if (estado.token) avisar(err.message, 'error');
@@ -204,7 +236,8 @@ async function cargarTodo(animar = false) {
 }
 
 function pintarMenu() {
-  const activo = $(`.menu a[data-vista="${estado.vista}"]`);
+  // En la ficha de un proyecto, el menú marca "Proyectos"
+  const activo = $(`.menu a[data-vista="${estado.vista === 'proyecto' ? 'proyectos' : estado.vista}"]`);
   $$('.menu a').forEach((a) => a.classList.toggle('activa', a === activo));
   const marca = $('.menu-marca');
   marca.style.cssText = `width:${activo.offsetWidth}px;height:${activo.offsetHeight}px;transform:translate(${activo.offsetLeft}px,${activo.offsetTop}px);opacity:1`;
@@ -212,18 +245,30 @@ function pintarMenu() {
 
 function pintar(animar) {
   const v = VISTAS[estado.vista];
-  $('#vista-titulo').innerHTML = v.titulo;
+  let { titulo, accion: textoAccion } = v;
+  const sobre = $('#vista-fecha');
+  if (estado.vista === 'proyecto') {
+    // Ficha: el título es el proyecto y arriba va el camino de vuelta
+    const p = proyectoActual();
+    titulo = p ? esc(p.nombre) : 'Proyecto';
+    if (!abierto(p)) textoAccion = null;
+    sobre.innerHTML = '<a class="volver" href="#proyectos">← Proyectos</a>';
+  } else {
+    sobre.textContent = new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+  $('#vista-titulo').innerHTML = titulo;
   document.title = `${$('#vista-titulo').textContent} · Pyahu Labs`;
   const accion = $('#accion-principal');
-  accion.hidden = !v.accion;
-  if (v.accion) accion.querySelector('span').textContent = v.accion;
-  accion.setAttribute('aria-label', v.accion || '');
+  accion.hidden = !textoAccion;
+  if (textoAccion) accion.querySelector('span').textContent = textoAccion;
+  accion.setAttribute('aria-label', textoAccion || '');
 
   const vista = $('#vista');
-  vista.innerHTML = { resumen: vistaResumen, clientes: vistaClientes, proyectos: vistaProyectos, pagos: vistaPagos }[estado.vista]();
+  vista.innerHTML = { resumen: vistaResumen, clientes: vistaClientes, proyectos: vistaProyectos, pagos: vistaPagos, proyecto: vistaProyecto }[estado.vista]();
   vista.classList.toggle('quieta', !animar);
   if (animar) { vista.classList.remove('cambia'); void vista.offsetWidth; vista.classList.add('cambia'); }
   animarVista(vista, animar);
+  if (estado.enfocar) { $(estado.enfocar)?.focus(); estado.enfocar = null; }
 }
 
 // Barras, anillo y números arrancan en cero y crecen al valor real
@@ -298,6 +343,7 @@ function vistaResumen() {
       ${kpi(1, 'var(--terracota)', 'Pendiente de cobro', r.total_pendiente, `de ${plural(activos, 'proyecto activo', 'proyectos activos')}`)}
       ${kpi(2, 'var(--dorado)', 'En presupuestos', r.total_presupuestado, `${plural(pe.presupuesto.proyectos, 'presupuesto', 'presupuestos')} sin aceptar`)}
     </div>
+    ${tarjetaNeto(r)}
     <div class="grilla resumen-medio">
       <article class="tarjeta anillo-caja entra" style="--i:3">
         <div class="anillo">
@@ -327,10 +373,69 @@ function vistaResumen() {
         ${proximasEntregas()}
       </article>
     </div>
-    <article class="tarjeta entra" style="--i:7;margin-top:18px">
-      <h3>Últimos pagos</h3>
-      <div class="lista">${ultimos || '<p class="suave" style="padding:16px 4px">Todavía no registraste pagos.</p>'}</div>
-    </article>`;
+    <div class="grilla resumen-medio resumen-final">
+      <article class="tarjeta entra" style="--i:7">
+        <h3>Para hacer</h3>
+        ${paraHacer()}
+      </article>
+      <article class="tarjeta entra" style="--i:8">
+        <h3>Últimos pagos</h3>
+        <div class="lista">${ultimos || '<p class="suave" style="padding:16px 4px">Todavía no registraste pagos.</p>'}</div>
+      </article>
+    </div>`;
+}
+
+// Lo que conviene resolver: pagos sin factura y pendientes de los proyectos activos
+function paraHacer() {
+  const { pagos, proyectos, tareas } = estado.datos;
+  const sinFactura = pagos.filter((p) => !p.facturado);
+  const activos = new Map(proyectos.filter((p) => p.estado === 'en_curso' || p.estado === 'presupuesto').map((p) => [p.id, p]));
+  const pendientes = tareas.filter((t) => !t.hecha && activos.has(t.proyecto_id));
+  const filas = [];
+  if (sinFactura.length) {
+    filas.push(`<a class="hacer hacer-factura" href="#pagos" data-accion="ver-sin-factura">
+      <span class="hacer-icono">${ICONOS.pago}</span>
+      <span><b>Facturar ${plural(sinFactura.length, 'pago', 'pagos')}</b><small>${gs(sinFactura.reduce((t, p) => t + p.monto, 0))} cobrados sin factura</small></span>
+      ${ICONOS.flecha}</a>`);
+  }
+  // Agrupados por proyecto, hasta 6 pendientes en total
+  for (const t of pendientes.slice(0, 6)) {
+    const p = activos.get(t.proyecto_id);
+    filas.push(`<a class="hacer" href="#proyecto-${p.id}">
+      <span class="hacer-check" aria-hidden="true"></span>
+      <span><b>${esc(t.texto)}</b><small>${esc(p.nombre)} · ${esc(p.cliente)}</small></span>
+      ${ICONOS.flecha}</a>`);
+  }
+  if (pendientes.length > 6) filas.push(`<p class="suave hacer-mas">Y ${plural(pendientes.length - 6, 'pendiente más', 'pendientes más')} en las fichas de los proyectos.</p>`);
+  if (!filas.length) return '<p class="suave" style="margin-top:12px">Todo al día: no hay pendientes ni pagos sin factura.</p>';
+  return `<div class="lista">${filas.join('')}</div>`;
+}
+
+// Lo que le queda al estudio de lo cobrado: una barra partida en neto, IVA y gastos
+function tarjetaNeto(r) {
+  const base = Math.max(1, r.total_cobrado, r.iva_cobrado + r.total_gastos);
+  const ancho = (n) => `${(Math.max(0, n) / base) * 100}%`;
+  return `<article class="tarjeta neto entra" style="--i:3">
+    <div class="neto-cabeza">
+      <div>
+        <p class="mono">Te queda de lo cobrado</p>
+        <p class="kpi-numero ${r.neto_cobrado < 0 ? 'negativo' : ''}"><small>₲</small><span data-contar="${r.neto_cobrado}">0</span></p>
+      </div>
+      <p class="suave">Lo cobrado menos el IVA que viene incluido y los gastos de los proyectos.
+        Los proyectos en curso y entregados, cobrados completos, dejan <b>${gs(r.neto_proyectado)}</b> netos.</p>
+    </div>
+    <div class="barra barra-neto" role="img" aria-label="De ${gs(r.total_cobrado)} cobrados: ${gs(r.neto_cobrado)} netos, ${gs(r.iva_cobrado)} de IVA y ${gs(r.total_gastos)} de gastos">
+      <i class="parte-neto" data-ancho="${ancho(r.neto_cobrado)}"></i>
+      <i class="parte-iva" data-ancho="${ancho(r.iva_cobrado)}"></i>
+      <i class="parte-gastos" data-ancho="${ancho(r.total_gastos)}"></i>
+    </div>
+    <div class="neto-partes">
+      <span style="--c:var(--verde)"><small>Neto</small><b>${gs(r.neto_cobrado)}</b></span>
+      <span style="--c:var(--dorado)"><small>IVA incluido</small><b>${gs(r.iva_cobrado)}</b></span>
+      <span style="--c:var(--terracota)"><small>Gastos</small><b>${gs(r.total_gastos)}</b></span>
+      <span style="--c:var(--linea)"><small>Cobrado</small><b>${gs(r.total_cobrado)}</b></span>
+    </div>
+  </article>`;
 }
 
 // Barras de los últimos 12 meses; la del mes actual va en terracota
@@ -377,14 +482,21 @@ function proximasEntregas() {
     </div>`).join('')}</div>`;
 }
 
-function filaPago(p, i, conAcciones = false) {
+// modo: sin nada (resumen), 'acciones' (lista de pagos: factura, editar y
+// borrar) o 'ficha' (dentro de un proyecto: no repite el nombre del proyecto)
+function filaPago(p, i, modo) {
   const proyecto = estado.datos.proyectos.find((x) => x.id === p.proyecto_id);
   const d = fecha(p.fecha);
+  const conAcciones = Boolean(modo);
+  const [titulo, detalle] = modo === 'ficha'
+    ? [p.nota || 'Pago', METODOS[p.metodo]]
+    : [proyecto ? proyecto.nombre : 'Proyecto borrado', `${proyecto ? proyecto.cliente : ''} · ${METODOS[p.metodo]}${p.nota ? ` · ${p.nota}` : ''}`];
   return `<div class="fila-pago entra ${conAcciones ? 'con-acciones' : ''}" style="--i:${Math.min(i, 12)}">
     <div class="fecha-chip"><b>${d.getDate()}</b><span>${d.toLocaleDateString('es-PY', { month: 'short' }).replace('.', '')}</span></div>
     <div style="min-width:0">
-      <p class="titulo">${esc(proyecto ? proyecto.nombre : 'Proyecto borrado')}</p>
-      <p class="detalle">${esc(proyecto ? proyecto.cliente : '')} · ${METODOS[p.metodo]}${p.nota ? ` · ${esc(p.nota)}` : ''}</p>
+      <p class="titulo">${esc(titulo)}</p>
+      <p class="detalle">${esc(detalle)}</p>
+      ${conAcciones ? `<p class="factura-linea">${chipFactura(p)}</p>` : ''}
     </div>
     <p class="monto">${gs(p.monto)}</p>
     ${conAcciones ? `<div class="acciones">
@@ -392,6 +504,12 @@ function filaPago(p, i, conAcciones = false) {
       <button class="icono peligro" data-accion="borrar-pago" data-id="${p.id}" aria-label="Borrar pago de ${gs(p.monto)}">${ICONOS.borrar}</button>
     </div>` : ''}
   </div>`;
+}
+
+// Facturado (con el número si lo hay) o un botón para marcarlo
+function chipFactura(p) {
+  if (p.facturado) return `<span class="chip factura si">${p.factura_numero ? `Factura ${esc(p.factura_numero)}` : 'Facturado'}</span>`;
+  return `<button type="button" class="chip factura no" data-accion="facturar" data-id="${p.id}">Sin factura · marcar</button>`;
 }
 
 // ---------- Exportar a CSV (se abre en Excel) ----------
@@ -414,14 +532,14 @@ function descargarCSV(nombre, encabezados, filas) {
 function exportar(que) {
   const { proyectos, pagos } = estado.datos;
   if (que === 'proyectos') {
-    descargarCSV('proyectos', ['ID', 'Proyecto', 'Cliente', 'Estado', 'Monto total', 'Cobrado', 'Saldo', 'Entrega'],
-      proyectos.map((p) => [p.id, p.nombre, p.cliente, ESTADOS[p.estado].nombre, p.monto_total, p.pagado, p.saldo, p.fecha_entrega || '']));
+    descargarCSV('proyectos', ['ID', 'Proyecto', 'Cliente', 'Estado', 'Monto total', 'IVA %', 'IVA', 'Gastos', 'Neto', 'Cobrado', 'Saldo', 'Entrega'],
+      proyectos.map((p) => [p.id, p.nombre, p.cliente, ESTADOS[p.estado].nombre, p.monto_total, p.tasa_iva, p.iva, p.gastos, p.neto,
+        p.pagado, p.saldo, p.fecha_entrega || '']));
   } else {
-    const lista = pagos.filter((p) => !estado.filtroPagos || p.proyecto_id === Number(estado.filtroPagos));
-    descargarCSV('pagos', ['ID', 'Fecha', 'Proyecto', 'Cliente', 'Monto', 'Método', 'Nota'],
-      lista.map((p) => {
+    descargarCSV('pagos', ['ID', 'Fecha', 'Proyecto', 'Cliente', 'Monto', 'Método', 'Nota', 'Facturado', 'N.º de factura'],
+      pagosFiltrados().map((p) => {
         const pr = proyectos.find((x) => x.id === p.proyecto_id) || {};
-        return [p.id, p.fecha, pr.nombre, pr.cliente, p.monto, METODOS[p.metodo], p.nota || ''];
+        return [p.id, p.fecha, pr.nombre, pr.cliente, p.monto, METODOS[p.metodo], p.nota || '', p.facturado ? 'Sí' : 'No', p.factura_numero || ''];
       }));
   }
 }
@@ -446,7 +564,11 @@ function tarjetasClientes() {
     [c.nombre, c.email, c.ruc_ci, c.telefono].some((v) => v && v.toLowerCase().includes(q)));
   if (!lista.length) return `<p class="suave">Ningún cliente coincide con “${esc(estado.buscar)}”.</p>`;
   return lista.map((c, i) => {
-    const n = estado.datos.proyectos.filter((p) => p.cliente_id === c.id).length;
+    const suyos = estado.datos.proyectos.filter((p) => p.cliente_id === c.id);
+    const n = suyos.length;
+    const cobrado = suyos.reduce((t, p) => t + p.pagado, 0);
+    // Lo que debe: saldo de proyectos en curso o entregados (no presupuestos ni cancelados)
+    const debe = suyos.filter((p) => p.estado === 'en_curso' || p.estado === 'entregado').reduce((t, p) => t + p.saldo, 0);
     return `<article class="tarjeta cliente entra" style="--i:${Math.min(i, 12)}">
       <div class="cliente-cabeza">
         <span class="avatar" style="--c:${colorDe(c.nombre)}">${esc(iniciales(c.nombre))}</span>
@@ -458,6 +580,10 @@ function tarjetasClientes() {
         ${c.ruc_ci ? `<span>${ICONOS.ruc}RUC/CI ${esc(c.ruc_ci)}</span>` : ''}
         ${!c.email && !c.telefono && !c.ruc_ci ? '<span>Sin datos de contacto</span>' : ''}
       </div>
+      ${n ? `<div class="cliente-cuentas">
+        <span><small>Te pagó</small><b>${gs(cobrado)}</b></span>
+        <span><small>Te debe</small><b class="${debe ? 'debe' : ''}">${debe ? gs(debe) : 'Nada'}</b></span>
+      </div>` : ''}
       <div class="cliente-pie">
         <span class="chip" style="--c:var(--azul)">${plural(n, 'proyecto', 'proyectos')}</span>
         <div class="acciones">
@@ -489,21 +615,28 @@ function vistaProyectos() {
     </div>`;
 }
 
+const gastosDe = (id) => estado.datos.gastos.filter((g) => g.proyecto_id === id);
+
 function tarjetaProyecto(p, i) {
   const pct = p.monto_total ? Math.min(100, (p.pagado / p.monto_total) * 100) : 0;
   const saldado = p.monto_total > 0 && p.saldo <= 0;
   const opciones = Object.entries(ESTADOS).map(([k, e]) => `<option value="${k}" ${k === p.estado ? 'selected' : ''}>${e.nombre}</option>`).join('');
   return `<article class="tarjeta proyecto entra ${saldado ? 'completo' : ''}" style="--i:${Math.min(i, 12)};--c:${ESTADOS[p.estado].color}">
     <div class="proyecto-cabeza">
-      <div style="min-width:0"><h3>${esc(p.nombre)}</h3><p class="cliente-nombre">${esc(p.cliente)}</p></div>
+      <div style="min-width:0"><h3><a href="#proyecto-${p.id}">${esc(p.nombre)}</a></h3><p class="cliente-nombre">${esc(p.cliente)}</p></div>
       <select class="selector-estado" data-accion="estado" data-id="${p.id}" aria-label="Estado de ${esc(p.nombre)}">${opciones}</select>
     </div>
     ${p.descripcion ? `<p class="descripcion">${esc(p.descripcion)}</p>` : ''}
-    ${chipEntrega(p) ? `<div>${chipEntrega(p)}</div>` : ''}
+    ${chipsSeguimiento(p)}
     <div class="progreso">
       <header><span><strong>${gs(p.pagado)}</strong> de ${gs(p.monto_total)}</span><span>${Math.round(pct)}%</span></header>
       <div class="barra"><i style="--i:${Math.min(i, 12)}" data-ancho="${pct}%"></i></div>
     </div>
+    <a class="cuentas" href="#proyecto-${p.id}" aria-label="Abrir la ficha de ${esc(p.nombre)}: neto ${gs(p.neto)}">
+      <span class="cuentas-neto"><small>Neto</small><b class="${p.neto < 0 ? 'negativo' : ''}">${gs(p.neto)}</b></span>
+      <span class="cuentas-detalle">${p.tasa_iva ? `IVA ${gs(p.iva)}` : 'Sin IVA'} · ${gastosDe(p.id).length ? `${plural(gastosDe(p.id).length, 'gasto', 'gastos')} ${gs(p.gastos)}` : 'Sin gastos'}</span>
+      <span class="cuentas-ver">Ficha ${ICONOS.flecha}</span>
+    </a>
     <div class="proyecto-pie">
       ${saldado
         ? `<span class="sello">${ICONOS.tilde}Saldado</span>`
@@ -518,6 +651,168 @@ function tarjetaProyecto(p, i) {
   </article>`;
 }
 
+// Entrega, factura y pendientes, en chips debajo de la descripción
+function chipsSeguimiento(p) {
+  const chips = [chipEntrega(p)];
+  if (p.sin_facturar) chips.push(`<span class="chip alerta">Sin factura ${gs(p.sin_facturar)}</span>`);
+  const faltan = p.tareas - p.tareas_hechas;
+  if (faltan) chips.push(`<span class="chip" style="--c:var(--azul)">${plural(faltan, 'pendiente', 'pendientes')}</span>`);
+  else if (p.tareas) chips.push('<span class="chip" style="--c:var(--verde)">Pendientes al día</span>');
+  const html = chips.filter(Boolean).join('');
+  return html ? `<div class="chips">${html}</div>` : '';
+}
+
+// ---------- Vista: Ficha de un proyecto ----------
+function vistaProyecto() {
+  const p = proyectoActual();
+  if (!p) return vacio('Ese proyecto <em>no está</em>', 'Puede que lo hayas borrado. Volvé a la lista para ver los que tenés.', { accion: 'ir-proyectos', texto: 'Ver proyectos' });
+  const pagos = estado.datos.pagos.filter((x) => x.proyecto_id === p.id);
+  const gastos = gastosDe(p.id);
+  // Primero lo que falta, después lo hecho
+  const tareas = estado.datos.tareas.filter((t) => t.proyecto_id === p.id).sort((a, b) => a.hecha - b.hecha || a.id - b.id);
+  const hechas = tareas.filter((t) => t.hecha).length;
+  const pct = p.monto_total ? Math.min(100, (p.pagado / p.monto_total) * 100) : 0;
+  const opciones = Object.entries(ESTADOS).map(([k, e]) => `<option value="${k}" ${k === p.estado ? 'selected' : ''}>${e.nombre}</option>`).join('');
+  // Botón para pedir el saldo por WhatsApp, si hay saldo y el cliente tiene teléfono
+  const whatsapp = abierto(p) && p.cliente_telefono
+    ? `<a class="btn btn-linea btn-chico btn-wa" href="${linkWhatsapp(p)}" target="_blank" rel="noopener">${ICONOS.whatsapp}<span>Pedir el saldo por WhatsApp</span></a>` : '';
+  const pie = chipsSeguimiento(p) + whatsapp;
+  const entrega = p.fecha_entrega ? fecha(p.fecha_entrega).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Sin fecha';
+
+  const ficha = `<article class="tarjeta ficha entra" style="--i:0;--c:${ESTADOS[p.estado].color}">
+    <div class="ficha-cabeza">
+      <div class="ficha-cliente">
+        <span class="avatar" style="--c:${colorDe(p.cliente)}">${esc(iniciales(p.cliente))}</span>
+        <div style="min-width:0"><p class="mono suave">Cliente</p><p class="ficha-cliente-nombre">${esc(p.cliente)}</p></div>
+      </div>
+      <div class="ficha-acciones">
+        <select class="selector-estado" data-accion="estado" data-id="${p.id}" aria-label="Estado del proyecto">${opciones}</select>
+        <button class="icono" data-accion="editar-proyecto" data-id="${p.id}" aria-label="Editar el proyecto">${ICONOS.editar}</button>
+        <button class="icono peligro" data-accion="borrar-proyecto" data-id="${p.id}" aria-label="Borrar el proyecto">${ICONOS.borrar}</button>
+      </div>
+    </div>
+    ${p.descripcion ? `<p class="ficha-descripcion">${esc(p.descripcion)}</p>` : ''}
+    <div class="ficha-datos">
+      <div><small>Monto total</small><b>${gs(p.monto_total)}</b></div>
+      <div><small>Cobrado · ${Math.round(pct)}%</small><b>${gs(p.pagado)}</b></div>
+      <div><small>Falta cobrar</small><b>${p.estado === 'cancelado' ? '—' : gs(p.saldo)}</b></div>
+      <div><small>Entrega</small><b>${entrega}</b></div>
+    </div>
+    <div class="barra ficha-barra"><i data-ancho="${pct}%"></i></div>
+    ${pie ? `<div class="ficha-pie">${pie}</div>` : ''}
+  </article>`;
+
+  const cuentas = `<article class="tarjeta entra" style="--i:1">
+    <h3>Cuentas</h3>
+    <dl class="desglose">
+      ${p.estado === 'cancelado'
+        ? `<div><dt>Cobrado antes de cancelar</dt><dd>${gs(p.pagado)}</dd></div>`
+        : `<div><dt>Monto total</dt><dd>${gs(p.monto_total)}</dd></div>`}
+      <div><dt>${p.tasa_iva ? `IVA ${p.tasa_iva} % incluido` : 'Sin IVA'}</dt><dd>${p.tasa_iva ? `− ${gs(p.iva)}` : '—'}</dd></div>
+      <div><dt>Gastos</dt><dd>${p.gastos ? `− ${gs(p.gastos)}` : '—'}</dd></div>
+      <div class="total"><dt>Neto</dt><dd class="${p.neto < 0 ? 'negativo' : ''}">${gs(p.neto)}</dd></div>
+    </dl>
+    <p class="estado-factura ${p.sin_facturar ? 'falta' : 'listo'}">${p.sin_facturar ? `Falta facturar ${gs(p.sin_facturar)} cobrados`
+      : pagos.length ? `${ICONOS.tilde}Todo lo cobrado está facturado` : 'Cuando registres pagos, acá ves si falta facturar alguno.'}</p>
+  </article>`;
+
+  const tarjetaPagos = `<article class="tarjeta entra" style="--i:3">
+    <header class="tarjeta-cabeza"><h3>Pagos</h3>
+      ${abierto(p) ? `<button class="btn btn-chico btn-pago" data-accion="pagar" data-id="${p.id}">${ICONOS.mas}<span>Registrar</span></button>` : ''}</header>
+    <div class="lista">${pagos.map((x, i) => filaPago(x, i, 'ficha')).join('') || '<p class="suave vacio-chico">Todavía no hay pagos.</p>'}</div>
+  </article>`;
+
+  const tarjetaGastos = `<article class="tarjeta entra" style="--i:4">
+    <header class="tarjeta-cabeza"><h3>Gastos</h3>
+      <button class="btn btn-linea btn-chico" data-accion="nuevo-gasto" data-id="${p.id}">${ICONOS.mas}<span>Agregar</span></button></header>
+    <ul class="gastos">${gastos.map((g) => `<li class="gasto">
+        <div style="min-width:0">
+          <p class="titulo">${esc(g.concepto)}</p>
+          <p class="detalle"><span class="chip" style="--c:${CATEGORIAS[g.categoria].color}">${CATEGORIAS[g.categoria].nombre}</span>
+            ${fecha(g.fecha).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+        </div>
+        <b class="monto">${gs(g.monto)}</b>
+        <div class="acciones">
+          <button class="icono" data-accion="editar-gasto" data-id="${g.id}" aria-label="Editar ${esc(g.concepto)}">${ICONOS.editar}</button>
+          <button class="icono peligro" data-accion="borrar-gasto" data-id="${g.id}" aria-label="Borrar ${esc(g.concepto)}">${ICONOS.borrar}</button>
+        </div>
+      </li>`).join('') || '<li class="suave vacio-chico">Dominio, hosting, licencias: lo que pagaste para este proyecto.</li>'}</ul>
+  </article>`;
+
+  const tarjetaPendientes = `<article class="tarjeta entra pendientes" style="--i:2">
+    <header class="tarjeta-cabeza"><h3>Pendientes</h3>${tareas.length ? `<span class="suave">${hechas} de ${tareas.length} hechos</span>` : ''}</header>
+    ${tareas.length ? `<div class="barra barra-tareas"><i data-ancho="${(hechas / tareas.length) * 100}%"></i></div>` : ''}
+    <ul class="tareas">${tareas.map((t) => `<li class="tarea ${t.hecha ? 'hecha' : ''}">
+        <label><input type="checkbox" data-tarea="${t.id}" ${t.hecha ? 'checked' : ''}>
+          <span class="tilde" aria-hidden="true">${ICONOS.tilde}</span><span class="texto">${esc(t.texto)}</span></label>
+        <button class="icono peligro" type="button" data-accion="borrar-tarea" data-id="${t.id}" aria-label="Borrar ${esc(t.texto)}">${ICONOS.cerrar}</button>
+      </li>`).join('')}</ul>
+    <form id="nueva-tarea" class="nueva-tarea" autocomplete="off">
+      <input name="texto" maxlength="255" placeholder="${tareas.length ? 'Agregar otro pendiente…' : 'Lo que le falta: pedir fotos, configurar el dominio…'}" aria-label="Nuevo pendiente">
+      <button class="icono" aria-label="Agregar pendiente">${ICONOS.mas}</button>
+    </form>
+  </article>`;
+
+  const tarjetaHistorial = `<article class="tarjeta entra historial" style="--i:5">
+    <h3>Historial</h3>
+    <form id="nueva-nota" class="nueva-nota">
+      <textarea name="texto" maxlength="2000" rows="2" placeholder="Anotá lo que pasó: qué pidió el cliente, qué se acordó, un cambio de planes…" aria-label="Nueva nota"></textarea>
+      <button class="btn btn-terracota btn-chico"><span>Guardar nota</span></button>
+    </form>
+    <ol class="linea-tiempo">${historialDe(p, pagos, gastos).map(eventoHistorial).join('')}</ol>
+  </article>`;
+
+  return `<div class="ficha-grilla">
+    ${ficha}
+    <div class="ficha-col">${cuentas}${tarjetaPagos}${tarjetaGastos}</div>
+    <div class="ficha-col">${tarjetaPendientes}${tarjetaHistorial}</div>
+  </div>`;
+}
+
+// Todo lo que pasó en el proyecto, lo más nuevo primero: notas, cambios de
+// estado, cobros, gastos y el día que se creó
+function historialDe(p, pagos, gastos) {
+  return [
+    ...estado.datos.notas.filter((n) => n.proyecto_id === p.id).map((n) => ({ tipo: n.tipo, cuando: new Date(n.creada_en), conHora: true, n })),
+    ...pagos.map((x) => ({ tipo: 'pago', cuando: fecha(x.fecha), x })),
+    ...gastos.map((g) => ({ tipo: 'gasto', cuando: fecha(g.fecha), g })),
+    ...(p.creado_en ? [{ tipo: 'creado', cuando: new Date(`${p.creado_en}T00:00:00`) }] : []),
+  ].sort((a, b) => b.cuando - a.cuando);
+}
+
+function eventoHistorial(e) {
+  const dia = e.cuando.toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' });
+  const hora = e.conHora ? ` · ${e.cuando.toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}` : '';
+  const ev = {
+    nota: () => ({ icono: ICONOS.nota, color: 'var(--dorado)', titulo: 'Nota', texto: e.n.texto }),
+    estado: () => ({ icono: ICONOS.estado, color: ESTADOS[e.n.estado].color, titulo: `Pasó a <b>${ESTADOS[e.n.estado].nombre}</b>`, texto: e.n.texto }),
+    pago: () => ({ icono: ICONOS.pago, color: 'var(--verde)', titulo: `Cobro de <b>${gs(e.x.monto)}</b>`,
+      texto: [METODOS[e.x.metodo], e.x.nota, e.x.facturado ? `Factura ${e.x.factura_numero || 'entregada'}` : 'Sin factura'].filter(Boolean).join(' · ') }),
+    gasto: () => ({ icono: ICONOS.gasto, color: 'var(--terracota)', titulo: `Gasto de <b>${gs(e.g.monto)}</b>`, texto: e.g.concepto }),
+    creado: () => ({ icono: ICONOS.creado, color: 'var(--tinta-suave)', titulo: 'Proyecto creado' }),
+  }[e.tipo]();
+  const borrable = e.tipo === 'nota' || e.tipo === 'estado';
+  return `<li class="evento evento-${e.tipo}" style="--c:${ev.color}">
+    <span class="evento-icono">${ev.icono}</span>
+    <div class="evento-cuerpo">
+      <p class="evento-titulo"><span>${ev.titulo}</span><time>${dia}${hora}</time></p>
+      ${ev.texto ? `<p class="evento-texto">${esc(ev.texto)}</p>` : ''}
+    </div>
+    ${borrable ? `<button class="icono peligro" data-accion="borrar-nota" data-id="${e.n.id}" aria-label="Borrar del historial">${ICONOS.borrar}</button>` : '<span class="evento-hueco"></span>'}
+  </li>`;
+}
+
+// Link de WhatsApp con el mensaje escrito. Acepta teléfonos como
+// "+595 981 123 456", "0981 123456" o "981123456" (se asume Paraguay)
+function linkWhatsapp(p) {
+  let n = String(p.cliente_telefono).replace(/\D/g, '');
+  if (n.startsWith('0')) n = `595${n.slice(1)}`;
+  else if (n.length <= 9) n = `595${n}`;
+  const texto = `¡Hola! Te escribo de Pyahu Labs por "${p.nombre}". Queda un saldo de ${gs(p.saldo)}. `
+    + '¿Te paso los datos para la transferencia? ¡Gracias!';
+  return `https://wa.me/${n}?text=${encodeURIComponent(texto)}`;
+}
+
 // ---------- Vista: Pagos ----------
 function vistaPagos() {
   const { pagos, proyectos } = estado.datos;
@@ -526,17 +821,23 @@ function vistaPagos() {
       ? vacio('Ningún <em>pago</em> todavía', 'Cuando un cliente te pague, registralo acá y el saldo del proyecto se actualiza solo.', { accion: 'pagar', texto: 'Registrar pago' })
       : vacio('Ningún <em>pago</em> todavía', 'Para registrar pagos primero necesitás un proyecto.', { accion: 'nuevo-proyecto', texto: 'Crear proyecto' });
   }
-  const lista = pagos.filter((p) => !estado.filtroPagos || p.proyecto_id === Number(estado.filtroPagos));
+  const lista = pagosFiltrados();
   const total = lista.reduce((t, p) => t + p.monto, 0);
+  const sinFactura = pagos.filter((p) => !p.facturado).length;
   const opciones = proyectos.map((p) => `<option value="${p.id}" ${String(p.id) === estado.filtroPagos ? 'selected' : ''}>${esc(p.nombre)} · ${esc(p.cliente)}</option>`).join('');
   return `
     <div class="herramientas">
       <select class="selector" id="filtro-pagos" aria-label="Filtrar por proyecto"><option value="">Todos los proyectos</option>${opciones}</select>
+      <button class="filtro ${estado.soloSinFactura ? 'activo' : ''}" data-accion="solo-sin-factura" aria-pressed="${estado.soloSinFactura}">Sin factura<b>${sinFactura}</b></button>
       <p class="total-pagos"><span class="suave">${plural(lista.length, 'pago', 'pagos')} ·</span><strong>${gs(total)}</strong></p>
       ${BOTON_CSV('pagos')}
     </div>
-    <article class="tarjeta"><div class="lista">${lista.map((p, i) => filaPago(p, i, true)).join('')}</div></article>`;
+    <article class="tarjeta"><div class="lista">${lista.map((p, i) => filaPago(p, i, 'acciones')).join('')
+      || '<p class="suave" style="padding:16px 4px">Ningún pago coincide con el filtro.</p>'}</div></article>`;
 }
+
+const pagosFiltrados = () => estado.datos.pagos.filter((p) =>
+  (!estado.filtroPagos || p.proyecto_id === Number(estado.filtroPagos)) && (!estado.soloSinFactura || !p.facturado));
 
 const BOTON_CSV = (que) => `<button class="btn btn-linea btn-chico" data-accion="exportar" data-que="${que}">
   <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Exportar CSV</span></button>`;
@@ -544,20 +845,31 @@ const BOTON_CSV = (que) => `<button class="btn btn-linea btn-chico" data-accion=
 // ---------- Modal ----------
 let alEnviarModal = null;
 
-function abrirModal({ titulo, cuerpo, ok = 'Guardar', peligro = false, alEnviar, alAbrir }) {
+// En celulares y tablets no se enfoca ningún campo al abrir un formulario: si no,
+// aparece el teclado de entrada, tapa medio formulario y no se puede deslizar
+const tactil = matchMedia('(hover: none), (pointer: coarse)').matches;
+
+// cancelar: el texto del botón que cierra sin guardar.
+// enfocar: false en los formularios de editar, que se abren para ver qué se puede
+// cambiar (en la compu, los de "nuevo" sí arrancan en el primer campo)
+function abrirModal({ titulo, cuerpo, ok = 'Guardar', cancelar = 'Cancelar', peligro = false, enfocar = true, alEnviar, alAbrir }) {
   const modal = $('#modal');
   $('#modal-titulo').innerHTML = titulo;
   $('#modal-cuerpo').innerHTML = cuerpo;
   $('#modal-form .error-form').textContent = '';
+  $('#modal .modal-pie .btn-linea').textContent = cancelar;
   const boton = $('#modal-ok');
   boton.innerHTML = `<span>${ok}</span>`;
   boton.classList.toggle('btn-peligro', peligro);
   alEnviarModal = alEnviar;
   modal.classList.remove('cerrando');
   modal.showModal();
+  modal.scrollTop = 0;
   if (alAbrir) alAbrir(modal);
   const primero = $('#modal-cuerpo input, #modal-cuerpo select');
-  if (primero) primero.focus();
+  // Sin campo enfocado, el foco va al título: los lectores de pantalla lo leen y no sale el teclado
+  if (primero && enfocar && !tactil) primero.focus();
+  else $('#modal-titulo').focus({ preventScroll: true });
 }
 
 function cerrarModal() {
@@ -602,6 +914,7 @@ const campo = (etiqueta, html, extra = '') => `<label class="campo"><span>${etiq
 function formCliente(c = {}) {
   abrirModal({
     titulo: c.id ? 'Editar <em>cliente</em>' : 'Nuevo <em>cliente</em>',
+    enfocar: !c.id,
     cuerpo: campo('Nombre', `<input name="nombre" required maxlength="150" value="${esc(c.nombre)}">`)
       + campo('Email', `<input name="email" type="email" maxlength="150" value="${esc(c.email)}">`)
       + `<div class="campos-2">${campo('Teléfono', `<input name="telefono" inputmode="tel" placeholder="+595 981 123456" value="${esc(c.telefono)}">`)}
@@ -620,18 +933,35 @@ function formProyecto(p = {}) {
   const { clientes } = estado.datos;
   const opcionesCli = clientes.map((c) => `<option value="${c.id}" ${c.id === p.cliente_id ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('');
   const opcionesEst = Object.entries(ESTADOS).map(([k, e]) => `<option value="${k}" ${k === (p.estado || 'presupuesto') ? 'selected' : ''}>${e.nombre}</option>`).join('');
+  const opcionesIva = TASAS_IVA.map(([t, nombre]) => `<option value="${t}" ${t === (p.tasa_iva ?? 10) ? 'selected' : ''}>${nombre}</option>`).join('');
   abrirModal({
     titulo: p.id ? 'Editar <em>proyecto</em>' : 'Nuevo <em>proyecto</em>',
+    enfocar: !p.id,
     cuerpo: campo('Cliente', `<select name="cliente_id" required>${p.id ? '' : '<option value="">Elegí un cliente</option>'}${opcionesCli}</select>`)
       + campo('Nombre del proyecto', `<input name="nombre" required maxlength="150" value="${esc(p.nombre)}" placeholder="Sitio web, identidad, tienda…">`)
       + campo('Descripción', `<textarea name="descripcion" maxlength="2000">${esc(p.descripcion)}</textarea>`)
       + `<div class="campos-2">${campo('Estado', `<select name="estado">${opcionesEst}</select>`)}
-         ${campo('Monto total (₲)', `<input name="monto_total" type="number" min="0" step="1" inputmode="numeric" required value="${p.monto_total ?? ''}">`)}</div>`
-      + campo('Fecha de entrega <span class="opcional">(opcional)</span>', `<input name="fecha_entrega" type="date" value="${esc(p.fecha_entrega)}">`)
+         ${campo('Entrega <span class="opcional">(opcional)</span>', `<input name="fecha_entrega" type="date" value="${esc(p.fecha_entrega)}">`)}</div>`
+      + `<div class="campos-2">${campo('Monto total (₲)', `<input name="monto_total" id="proyecto-monto" type="number" min="0" step="1" inputmode="numeric" required value="${p.monto_total ?? ''}">`)}
+         ${campo('IVA', `<select name="tasa_iva" id="proyecto-iva">${opcionesIva}</select>`)}</div>`
+      + '<p class="aviso-saldo" id="proyecto-iva-detalle"></p>'
       + (p.id && p.pagado ? `<p class="aviso-saldo">Ya se cobraron ${gs(p.pagado)}: el monto total no puede ser menor.</p>` : ''),
     ok: p.id ? 'Guardar cambios' : 'Crear proyecto',
+    // Debajo del monto se ve en vivo cuánto es IVA y cuánto queda sin IVA
+    alAbrir: () => {
+      const mostrar = () => {
+        const monto = Number($('#proyecto-monto').value) || 0;
+        const tasa = Number($('#proyecto-iva').value);
+        $('#proyecto-iva-detalle').textContent = !monto ? 'El monto es lo que paga el cliente, con el IVA incluido.'
+          : tasa ? `Incluye ${gs(ivaIncluido(monto, tasa))} de IVA. Sin IVA: ${gs(monto - ivaIncluido(monto, tasa))}.`
+          : `Sin IVA: los ${gs(monto)} quedan completos, antes de gastos.`;
+      };
+      $('#proyecto-monto').addEventListener('input', mostrar);
+      $('#proyecto-iva').addEventListener('change', mostrar);
+      mostrar();
+    },
     alEnviar: async (fd) => {
-      const datos = leerForm(fd, ['cliente_id', 'monto_total']);
+      const datos = leerForm(fd, ['cliente_id', 'monto_total', 'tasa_iva']);
       if (p.id) { await api(`/proyectos/${p.id}`, 'PUT', datos); return 'Proyecto actualizado'; }
       await api('/proyectos', 'POST', datos);
       return 'Proyecto creado';
@@ -652,9 +982,11 @@ function formPago(proyectoId) {
       + `<div class="campos-2">${campo('Monto (₲)', `<input name="monto" id="pago-monto" type="number" min="1" step="1" inputmode="numeric" required>`)}
          ${campo('Fecha', `<input name="fecha" type="date" required value="${hoyISO()}">`)}</div>`
       + campo('Método', `<select name="metodo">${metodos}</select>`)
-      + campo('Nota', '<input name="nota" maxlength="255" placeholder="Seña, segunda cuota…">'),
+      + campo('Nota', '<input name="nota" maxlength="255" placeholder="Seña, segunda cuota…">')
+      + camposFactura(),
     ok: 'Registrar pago',
     alAbrir: () => {
+      prepararFactura();
       const select = $('#pago-proyecto');
       const mostrar = () => {
         const p = abiertos.find((x) => x.id === Number(select.value));
@@ -669,7 +1001,7 @@ function formPago(proyectoId) {
       mostrar();
     },
     alEnviar: async (fd) => {
-      const datos = leerForm(fd, ['proyecto_id', 'monto']);
+      const datos = leerPago(fd, ['proyecto_id', 'monto']);
       await api('/pagos', 'POST', datos);
       if (datos.monto === saldoElegido) {
         const b = $('#modal-ok').getBoundingClientRect();
@@ -687,15 +1019,119 @@ function formEditarPago(pago) {
   const metodos = Object.entries(METODOS).map(([k, n]) => `<option value="${k}" ${k === pago.metodo ? 'selected' : ''}>${n}</option>`).join('');
   abrirModal({
     titulo: 'Editar <em>pago</em>',
+    enfocar: false,
     cuerpo: `<p class="aviso-saldo">${esc(proyecto.nombre)} · ${esc(proyecto.cliente)} · hasta <b>${gs(maximo)}</b></p>`
       + `<div class="campos-2">${campo('Monto (₲)', `<input name="monto" type="number" min="1" max="${maximo}" step="1" inputmode="numeric" required value="${pago.monto}">`)}
          ${campo('Fecha', `<input name="fecha" type="date" required value="${esc(pago.fecha)}">`)}</div>`
       + campo('Método', `<select name="metodo">${metodos}</select>`)
-      + campo('Nota', `<input name="nota" maxlength="255" value="${esc(pago.nota)}">`),
+      + campo('Nota', `<input name="nota" maxlength="255" value="${esc(pago.nota)}">`)
+      + camposFactura(pago),
     ok: 'Guardar cambios',
+    alAbrir: prepararFactura,
     alEnviar: async (fd) => {
-      await api(`/pagos/${pago.id}`, 'PUT', leerForm(fd, ['monto']));
+      await api(`/pagos/${pago.id}`, 'PUT', leerPago(fd, ['monto']));
       return 'Pago actualizado';
+    },
+  });
+}
+
+// ---------- Facturas ----------
+// Casilla "Le di factura" y el número, que aparece solo si está tildada
+const camposFactura = (pago = {}) => `<div class="factura-campos">
+  <label class="casilla"><input type="checkbox" name="facturado" id="pago-facturado" ${pago.facturado ? 'checked' : ''}>
+    <span>Le di factura</span></label>
+  ${campo('N.º de factura <span class="opcional">(opcional)</span>',
+    `<input name="factura_numero" id="pago-factura" maxlength="30" placeholder="001-001-0000123" value="${esc(pago.factura_numero)}">`)}
+</div>`;
+
+function prepararFactura() {
+  const casilla = $('#pago-facturado');
+  const mostrar = () => { $('#pago-factura').closest('.campo').hidden = !casilla.checked; };
+  casilla.addEventListener('change', () => { mostrar(); if (casilla.checked) $('#pago-factura').focus(); });
+  mostrar();
+}
+
+// Como leerForm, pero la casilla de factura se vuelve true o false
+function leerPago(fd, numericos) {
+  const datos = leerForm(fd, numericos);
+  datos.facturado = fd.has('facturado');
+  if (!datos.facturado) datos.factura_numero = '';
+  return datos;
+}
+
+function formFactura(pago) {
+  const proyecto = estado.datos.proyectos.find((p) => p.id === pago.proyecto_id);
+  abrirModal({
+    titulo: 'Marcar <em>facturado</em>',
+    cuerpo: `<p class="aviso-saldo">${gs(pago.monto)} del ${fecha(pago.fecha).toLocaleDateString('es-PY', { day: 'numeric', month: 'long' })}
+        · ${esc(proyecto ? proyecto.nombre : '')}</p>`
+      + campo('N.º de factura <span class="opcional">(opcional)</span>', '<input name="factura_numero" maxlength="30" placeholder="001-001-0000123">'),
+    ok: 'Marcar facturado',
+    alEnviar: async (fd) => {
+      await api(`/pagos/${pago.id}/factura`, 'PATCH', { facturado: true, factura_numero: leerForm(fd).factura_numero });
+      return 'Pago facturado';
+    },
+  });
+}
+
+// ---------- Gastos ----------
+function formGasto(proyectoId, g = {}) {
+  const categorias = Object.entries(CATEGORIAS).map(([k, c]) => `<option value="${k}" ${k === (g.categoria || 'dominio') ? 'selected' : ''}>${c.nombre}</option>`).join('');
+  const p = estado.datos.proyectos.find((x) => x.id === proyectoId);
+  abrirModal({
+    titulo: g.id ? 'Editar <em>gasto</em>' : 'Nuevo <em>gasto</em>',
+    enfocar: !g.id,
+    cuerpo: `<p class="aviso-saldo">${esc(p.nombre)} · ${esc(p.cliente)}</p>`
+      + campo('Concepto', `<input name="concepto" maxlength="150" required placeholder="Dominio .com.py por 1 año" value="${esc(g.concepto)}">`)
+      + `<div class="campos-2">${campo('Categoría', `<select name="categoria">${categorias}</select>`)}
+         ${campo('Monto (₲)', `<input name="monto" type="number" min="1" step="1" inputmode="numeric" required value="${g.monto ?? ''}">`)}</div>`
+      + campo('Fecha', `<input name="fecha" type="date" required value="${esc(g.fecha || hoyISO())}">`),
+    ok: g.id ? 'Guardar cambios' : 'Agregar gasto',
+    alEnviar: async (fd) => {
+      const datos = leerForm(fd, ['monto']);
+      if (g.id) { await api(`/gastos/${g.id}`, 'PUT', datos); return 'Gasto actualizado'; }
+      await api('/gastos', 'POST', { ...datos, proyecto_id: proyectoId });
+      return 'Gasto agregado';
+    },
+  });
+}
+
+// Borrar sin abrir otro modal: el primer toque pide confirmación en el mismo
+// botón ("¿Borrar?") y el segundo borra. Si no tocás de nuevo, vuelve solo
+async function borrarEnLinea(boton, ruta, aviso) {
+  if (!boton.classList.contains('confirmar')) {
+    const antes = boton.innerHTML;
+    boton.classList.add('confirmar');
+    boton.innerHTML = '<span>¿Borrar?</span>';
+    setTimeout(() => {
+      if (boton.isConnected && boton.classList.contains('confirmar')) { boton.classList.remove('confirmar'); boton.innerHTML = antes; }
+    }, 3000);
+    return;
+  }
+  try {
+    await api(ruta, 'DELETE');
+    avisar(aviso);
+    await cargarTodo(false);
+  } catch (err) {
+    avisar(err.message, 'error');
+  }
+}
+
+// ---------- Cambio de estado ----------
+// Al cancelar, se pregunta qué pasó: queda en el historial del proyecto
+function formCancelar(p) {
+  abrirModal({
+    titulo: `¿Cancelar <em>${esc(p.nombre)}</em>?`,
+    enfocar: false,
+    cuerpo: `<p class="aviso-saldo">${p.pagado ? `Ya se cobraron ${gs(p.pagado)}: esos pagos quedan registrados.` : 'No tiene pagos registrados.'}</p>`
+      + campo('¿Qué pasó? <span class="opcional">(opcional, queda en el historial)</span>',
+        '<textarea name="nota" maxlength="2000" placeholder="El cliente frenó el proyecto por presupuesto, queda la seña…"></textarea>'),
+    ok: 'Cancelar proyecto',
+    cancelar: 'Volver',
+    peligro: true,
+    alEnviar: async (fd) => {
+      await api(`/proyectos/${p.id}/estado`, 'PATCH', { estado: 'cancelado', nota: leerForm(fd).nota });
+      return 'Proyecto cancelado';
     },
   });
 }
@@ -720,6 +1156,8 @@ function confirmarBorrado(tipo, item) {
     peligro: true,
     alEnviar: async () => {
       await api(`/${rutas[tipo]}/${item.id}`, 'DELETE');
+      // Si estabas en la ficha del proyecto borrado, volvés a la lista
+      if (tipo === 'proyecto' && estado.vista === 'proyecto') location.hash = 'proyectos';
       return { cliente: 'Cliente borrado', proyecto: 'Proyecto borrado', pago: 'Pago borrado' }[tipo];
     },
   });
@@ -735,6 +1173,15 @@ function acciones(e) {
     case 'editar-pago': return formEditarPago(pagos.find((p) => p.id === id));
     case 'borrar-pago': return confirmarBorrado('pago', pagos.find((p) => p.id === id));
     case 'exportar': return exportar(el.dataset.que);
+    case 'facturar': return formFactura(pagos.find((p) => p.id === id));
+    case 'nuevo-gasto': return formGasto(id);
+    case 'editar-gasto': { const g = estado.datos.gastos.find((x) => x.id === id); return formGasto(g.proyecto_id, g); }
+    case 'borrar-gasto': return borrarEnLinea(el, `/gastos/${id}`, 'Gasto borrado');
+    case 'borrar-tarea': return borrarEnLinea(el, `/tareas/${id}`, 'Pendiente borrado');
+    case 'borrar-nota': return borrarEnLinea(el, `/notas/${id}`, 'Nota borrada');
+    case 'solo-sin-factura': estado.soloSinFactura = !estado.soloSinFactura; return pintar(false);
+    // Desde "Para hacer" del resumen: abre Pagos con el filtro puesto
+    case 'ver-sin-factura': estado.soloSinFactura = true; estado.filtroPagos = ''; return;
     case 'tema': return cambiarTema(el);
     case 'nuevo-cliente': return formCliente();
     case 'editar-cliente': return formCliente(clientes.find((c) => c.id === id));
@@ -743,11 +1190,16 @@ function acciones(e) {
     case 'editar-proyecto': return formProyecto(proyectos.find((p) => p.id === id));
     case 'borrar-proyecto': return confirmarBorrado('proyecto', proyectos.find((p) => p.id === id));
     case 'pagar': return formPago(id);
+    case 'ir-proyectos': location.hash = 'proyectos'; return;
     case 'filtrar-proyectos': estado.filtroProyectos = el.dataset.estado; return pintar(true);
   }
 }
 
 async function cambiarEstado(select) {
+  const p = estado.datos.proyectos.find((x) => x.id === Number(select.dataset.id));
+  // Cancelar pide el motivo en un modal: mientras tanto el selector vuelve al
+  // estado real, y si cerrás el modal sin confirmar no cambia nada
+  if (select.value === 'cancelado') { select.value = p.estado; return formCancelar(p); }
   try {
     await api(`/proyectos/${select.dataset.id}/estado`, 'PATCH', { estado: select.value });
     avisar(`Ahora está ${ESTADOS[select.value].nombre.toLowerCase()}`);
@@ -758,12 +1210,60 @@ async function cambiarEstado(select) {
   }
 }
 
+// ---------- Pendientes y notas (en la ficha) ----------
+async function tildarTarea(casilla) {
+  const t = estado.datos.tareas.find((x) => x.id === Number(casilla.dataset.tarea));
+  casilla.disabled = true;
+  try {
+    await api(`/tareas/${t.id}`, 'PUT', { texto: t.texto, hecha: casilla.checked });
+    if (casilla.checked) avisar('Pendiente hecho');
+  } catch (err) {
+    avisar(err.message, 'error');
+  }
+  await cargarTodo(false);
+}
+
+async function agregarTarea(e) {
+  e.preventDefault();
+  const input = e.target.texto;
+  if (!input.value.trim()) return input.focus();
+  try {
+    await api('/tareas', 'POST', { proyecto_id: estado.proyectoId, texto: input.value });
+    estado.enfocar = '#nueva-tarea input'; // así podés cargar varios seguidos
+    await cargarTodo(false);
+  } catch (err) {
+    avisar(err.message, 'error');
+  }
+}
+
+async function agregarNota(e) {
+  e.preventDefault();
+  const texto = e.target.texto;
+  if (!texto.value.trim()) return texto.focus();
+  const boton = e.target.querySelector('button');
+  boton.classList.add('cargando');
+  try {
+    await api('/notas', 'POST', { proyecto_id: estado.proyectoId, texto: texto.value });
+    avisar('Nota guardada');
+    await cargarTodo(false);
+  } catch (err) {
+    avisar(err.message, 'error');
+    boton.classList.remove('cargando');
+  }
+}
+
 function iniciar() {
   prepararAcceso();
   document.addEventListener('click', acciones);
   $('#vista').addEventListener('change', (e) => {
     if (e.target.dataset.accion === 'estado') cambiarEstado(e.target);
     if (e.target.id === 'filtro-pagos') { estado.filtroPagos = e.target.value; pintar(false); }
+    if (e.target.dataset.tarea) tildarTarea(e.target);
+  });
+  // Formularios de la ficha: agregar un pendiente o escribir una nota
+  $('#vista').addEventListener('submit', (e) => {
+    if (e.target.id === 'nueva-tarea') agregarTarea(e);
+    if (e.target.id === 'nueva-nota') agregarNota(e);
   });
   $('#vista').addEventListener('input', (e) => {
     if (e.target.id !== 'buscar') return;
@@ -771,7 +1271,7 @@ function iniciar() {
     $('#lista-clientes').innerHTML = tarjetasClientes();
   });
   $('#accion-principal').addEventListener('click', () => {
-    ({ clientes: formCliente, proyectos: formProyecto, pagos: formPago })[estado.vista]?.();
+    ({ clientes: formCliente, proyectos: formProyecto, pagos: formPago, proyecto: () => formPago(estado.proyectoId) })[estado.vista]?.();
   });
   $('#salir').addEventListener('click', () => cerrarSesion());
   $('#modal-form').addEventListener('submit', enviarModal);

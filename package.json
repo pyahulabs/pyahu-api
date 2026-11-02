@@ -8,9 +8,13 @@
     "dev": "node --watch src/server.js",
     "migrar": "node scripts/migrar.js",
     "demo": "node scripts/datos-demo.js",
+    "armar-demo": "node scripts/armar-demo.js",
     "test": "node --test --test-concurrency=1 \"test/*.test.js\""
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
